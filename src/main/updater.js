@@ -5,6 +5,17 @@ const RELEASES_URL = 'https://github.com/lmk1010/OpenExam/releases';
 const LATEST_RELEASE_API = 'https://api.github.com/repos/lmk1010/OpenExam/releases/latest';
 const AUTO_INSTALL_ENABLED = process.platform === 'win32';
 
+/**
+ * 双更新源：优先 GitHub 官方源，失败自动回退国内镜像（generic feed 反代 release 资产）。
+ * electron-updater 的 generic 源会读取 `${url}/latest.yml`，GitHub release 的
+ * `releases/latest/download/latest.yml` 会 302 到对应资产，镜像代理可透传。
+ */
+const UPDATE_SOURCES = [
+  { name: 'github', type: 'default' },
+  { name: 'mirror-ghfast', type: 'generic', url: 'https://ghfast.top/https://github.com/lmk1010/OpenExam/releases/latest/download' },
+  { name: 'mirror-ghproxy', type: 'generic', url: 'https://mirror.ghproxy.com/https://github.com/lmk1010/OpenExam/releases/latest/download' },
+];
+
 let initialized = false;
 let autoUpdaterBound = false;
 
@@ -80,6 +91,19 @@ async function fetchLatestRelease() {
     notes: typeof payload.body === 'string' ? payload.body.slice(0, 4000) : '',
     publishedAt: payload.published_at || payload.created_at || '',
   };
+}
+
+function applyFeed(source) {
+  try {
+    if (source.type === 'generic') {
+      autoUpdater.setFeedURL({ provider: 'generic', url: source.url });
+    } else {
+      autoUpdater.setFeedURL({ provider: 'github', owner: 'lmk1010', repo: 'OpenExam' });
+    }
+    state.feedSource = source.name;
+  } catch (error) {
+    console.error('[updater] 切换更新源失败:', error.message);
+  }
 }
 
 function bindAutoUpdater() {
@@ -217,19 +241,27 @@ async function checkForUpdates() {
   }
 
   bindAutoUpdater();
-  try {
-    await autoUpdater.checkForUpdates();
-  } catch (error) {
-    return patchState({
-      status: 'error',
-      message: '自动更新检查失败，请前往 GitHub Release 下载最新版',
-      error: error?.message || '未知错误',
-      progress: 0,
-      lastCheckedAt: new Date().toISOString(),
-    });
+
+  // 双源回退：GitHub 失败依次尝试国内镜像
+  let lastError = null;
+  for (const source of UPDATE_SOURCES) {
+    applyFeed(source);
+    try {
+      await autoUpdater.checkForUpdates();
+      return snapshot();
+    } catch (error) {
+      lastError = error;
+      console.warn(`[updater] 更新源 ${source.name} 不可用:`, error?.message || error);
+    }
   }
 
-  return snapshot();
+  return patchState({
+    status: 'error',
+    message: '自动更新检查失败，请前往 GitHub Release 下载最新版',
+    error: lastError?.message || '未知错误',
+    progress: 0,
+    lastCheckedAt: new Date().toISOString(),
+  });
 }
 
 async function openReleasePage() {

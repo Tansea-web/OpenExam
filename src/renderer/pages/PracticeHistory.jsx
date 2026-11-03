@@ -1,14 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { CATEGORY_META } from '../../shared/categoryMeta.js';
 
-const categoryNames = {
-  yanyu: '言语理解',
-  shuliang: '数量关系',
-  panduan: '判断推理',
-  ziliao: '资料分析',
-  changshi: '常识判断'
-};
+const categoryNames = Object.fromEntries(
+  Object.entries(CATEGORY_META).map(([key, meta]) => [key, meta.name])
+);
 
-export default function PracticeHistory({ onBack, onOpenRecord }) {
+export default function PracticeHistory({ onBack, onOpenRecord, subject = '', trackLabel = '' }) {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ total: 0, avgAccuracy: 0, totalTime: 0 });
@@ -21,7 +18,7 @@ export default function PracticeHistory({ onBack, onOpenRecord }) {
         return;
       }
       try {
-        const allRecords = await window.openexam.db.getPracticeRecords();
+        const allRecords = await window.openexam.db.getPracticeRecords(subject ? { subject } : undefined);
         const data = (allRecords || []).filter((record) => {
           const status = String(record?.status || '').toLowerCase();
           return ['completed', 'ongoing', 'paused'].includes(status);
@@ -41,7 +38,7 @@ export default function PracticeHistory({ onBack, onOpenRecord }) {
       setLoading(false);
     };
     loadRecords();
-  }, []);
+  }, [subject]);
 
   const formatDate = (dateStr) => {
     if (!dateStr) return '-';
@@ -92,7 +89,7 @@ export default function PracticeHistory({ onBack, onOpenRecord }) {
           </svg>
           返回
         </button>
-        <h2>练习历史</h2>
+        <h2>练习历史{trackLabel ? ` · ${trackLabel}` : ''}</h2>
       </div>
 
       <div className="history-stats">
@@ -157,7 +154,7 @@ export default function PracticeHistory({ onBack, onOpenRecord }) {
             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="1.5">
               <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
             </svg>
-            <p>暂无练习记录</p>
+            <p>{trackLabel ? `「${trackLabel}」暂无练习记录` : '暂无练习记录'}</p>
             <span>开始练习后，记录将显示在这里</span>
           </div>
         ) : (

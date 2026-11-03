@@ -8,6 +8,13 @@ const CATEGORY_ALIASES = createAliasMap({
   panduan: ['panduan', '判断推理', '判断'],
   ziliao: ['ziliao', '资料分析', '资料'],
   changshi: ['changshi', '常识判断', '常识', '政治', '经济', '法律', '科技', '人文', '地理'],
+  cs_base: ['cs_base', '计算机基础', '计基', '计算机'],
+  cs_net: ['cs_net', '计算机网络', '网络'],
+  cs_security: ['cs_security', '网络安全', '信息安全'],
+  cs_os: ['cs_os', '操作系统'],
+  cs_db: ['cs_db', '数据库'],
+  cs_prog: ['cs_prog', '程序设计', '编程'],
+  cs_office: ['cs_office', '办公软件', 'office'],
 });
 
 const SUBCATEGORY_ALIASES = createAliasMap({
@@ -32,10 +39,17 @@ const SUBCATEGORY_ALIASES = createAliasMap({
   keji: ['keji', '自然科技', '科学推理', '科技'],
   renwen: ['renwen', '人文历史', '历史', '人文'],
   dili: ['dili', '地理国情', '地理'],
+  cs_base: ['cs_base', '计算机基础', '计基', '计算机'],
+  cs_net: ['cs_net', '计算机网络', '网络'],
+  cs_security: ['cs_security', '网络安全', '信息安全'],
+  cs_os: ['cs_os', '操作系统'],
+  cs_db: ['cs_db', '数据库'],
+  cs_prog: ['cs_prog', '程序设计', '编程'],
+  cs_office: ['cs_office', '办公软件'],
 });
 
-const SUBCATEGORY_CATEGORY_MAP = { xuanci: 'yanyu', yueduan: 'yanyu', yuju: 'yanyu', wenzhang: 'yanyu', jisuan: 'shuliang', tuili: 'shuliang', tuxing: 'panduan', dingyi: 'panduan', leibi: 'panduan', luoji: 'panduan', wenzi: 'ziliao', biaoge: 'ziliao', tubiao: 'ziliao', zonghe: 'ziliao', zengzhang: 'ziliao', zhengzhi: 'changshi', jingji: 'changshi', falv: 'changshi', keji: 'changshi', renwen: 'changshi', dili: 'changshi' };
-const DEFAULT_SUBCATEGORY = { yanyu: 'yueduan', shuliang: 'jisuan', panduan: 'luoji', ziliao: 'zonghe', changshi: 'zhengzhi' };
+const SUBCATEGORY_CATEGORY_MAP = { xuanci: 'yanyu', yueduan: 'yanyu', yuju: 'yanyu', wenzhang: 'yanyu', jisuan: 'shuliang', tuili: 'shuliang', tuxing: 'panduan', dingyi: 'panduan', leibi: 'panduan', luoji: 'panduan', wenzi: 'ziliao', biaoge: 'ziliao', tubiao: 'ziliao', zonghe: 'ziliao', zengzhang: 'ziliao', zhengzhi: 'changshi', jingji: 'changshi', falv: 'changshi', keji: 'changshi', renwen: 'changshi', dili: 'changshi', cs_base: 'cs_base', cs_net: 'cs_net', cs_security: 'cs_security', cs_os: 'cs_os', cs_db: 'cs_db', cs_prog: 'cs_prog', cs_office: 'cs_office' };
+const DEFAULT_SUBCATEGORY = { yanyu: 'yueduan', shuliang: 'jisuan', panduan: 'luoji', ziliao: 'zonghe', changshi: 'zhengzhi', cs_base: 'cs_base', cs_net: 'cs_net', cs_security: 'cs_security', cs_os: 'cs_os', cs_db: 'cs_db', cs_prog: 'cs_prog', cs_office: 'cs_office' };
 const CATEGORY_RULES = [
   { value: 'ziliao', patterns: ['根据下列资料', '根据以下资料', '图表', '统计表', '同比', '环比', '增长率', '表中', '图中'] },
   { value: 'panduan', patterns: ['根据上述定义', '图形', '问号处', '最能支持', '最能削弱', '如果那么', '只有才'] },

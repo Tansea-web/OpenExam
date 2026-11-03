@@ -4,11 +4,24 @@ import CustomSelect from '../components/CustomSelect.jsx';
 import ProviderLogo from '../components/ProviderLogo.jsx';
 import appLogo from '../assets/openexam-logo.png';
 import { useDialog } from '../components/DialogProvider.jsx';
+import TrackManager from '../components/TrackManager.jsx';
+import { AI_SECURE_MARKER } from '../store/aiSettings.js';
 
 const RESETTABLE_LOCAL_KEYS = ['openexam_settings', 'openexam_onboarding_done_v1', 'openexam_ai_active_session', 'openexam_question_context'];
 
 const NavIcon = ({ type }) => {
   const common = { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round' };
+  if (type === 'tracks') {
+    return (
+      <svg {...common}>
+        <path d="M4 6h7" />
+        <path d="M4 12h11" />
+        <path d="M4 18h15" />
+        <circle cx="17" cy="6" r="2" />
+        <circle cx="19" cy="12" r="2" />
+      </svg>
+    );
+  }
   if (type === 'ai') {
     return (
       <svg {...common}>
@@ -47,7 +60,7 @@ const NavIcon = ({ type }) => {
   );
 };
 
-export default function Settings({ onBack }) {
+export default function Settings({ onBack, onTracksConfigChange }) {
   const [settings, setSettings] = useState(DEFAULT_AI_SETTINGS);
   const [showKey, setShowKey] = useState(false);
   const [testStatus, setTestStatus] = useState(null);
@@ -138,7 +151,13 @@ export default function Settings({ onBack }) {
   }, []);
 
   const handleSave = async () => {
-    const normalized = normalizeAISettings(settings);
+    // 密钥占位符：密钥由主进程加密存储，localStorage 只保留占位
+    const secured = {
+      ...settings,
+      apiKey: settings.apiKey?.trim() || AI_SECURE_MARKER,
+      ocrApiKey: settings.ocrApiKey?.trim() || AI_SECURE_MARKER,
+    };
+    const normalized = normalizeAISettings(secured);
     setSettings(normalized);
     localStorage.setItem('openexam_settings', JSON.stringify(normalized));
     const now = new Date().toISOString();
@@ -152,7 +171,7 @@ export default function Settings({ onBack }) {
       console.error('写入 SQLite 配置失败:', error);
       setPersistStatus('local');
     }
-    showToast({ title: '配置已保存', message: persistStatus === 'sqlite' ? '已同步写入本地数据库。' : '已保存到本地缓存。', tone: 'success' });
+    showToast({ title: '配置已保存', message: persistStatus === 'sqlite' ? '已同步写入本地数据库，密钥已加密。' : '已保存到本地缓存。', tone: 'success' });
     setTestStatus('saved');
     setTimeout(() => setTestStatus(null), 2000);
   };
@@ -426,6 +445,7 @@ export default function Settings({ onBack }) {
   const currentProvider = getAIProvider(settings.aiProvider);
 
   const navItems = [
+    { id: 'tracks', label: '目标管理', icon: <NavIcon type="tracks" /> },
     { id: 'ai', label: 'AI 模型', icon: <NavIcon type="ai" /> },
     { id: 'import', label: '导入设置', icon: <NavIcon type="import" /> },
     { id: 'data', label: '数据管理', icon: <NavIcon type="data" /> },
@@ -472,6 +492,10 @@ export default function Settings({ onBack }) {
 
         {/* Content Area */}
         <div style={{ display: "flex", flexDirection: "column", gap: 24, overflow: "auto", paddingRight: 8 }}>
+          {activeSection === 'tracks' && (
+            <TrackManager onChange={onTracksConfigChange} />
+          )}
+
           {activeSection === 'ai' && (
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
               <div>
@@ -503,7 +527,7 @@ export default function Settings({ onBack }) {
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                     <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text)" }}>API Key</label>
                     <div style={{ display: "flex", gap: 8 }}>
-                      <input type={showKey ? "text" : "password"} value={settings.apiKey} onChange={(e) => setSettings(prev => ({ ...prev, apiKey: e.target.value }))} placeholder="sk-..."
+                      <input type={showKey ? "text" : "password"} value={settings.apiKey === AI_SECURE_MARKER ? "" : settings.apiKey} onChange={(e) => setSettings(prev => ({ ...prev, apiKey: e.target.value }))} placeholder="已加密保存；输入新值以更换（sk-...)"
                         style={{ flex: 1, padding: "8px 12px", borderRadius: 6, border: "1px solid var(--line)", background: "var(--surface)", fontSize: 13, outline: "none", color: "var(--text)" }}
                       />
                       <button onClick={() => setShowKey(!showKey)} style={{ width: 36, height: 36, borderRadius: 6, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--muted)", display: "grid", placeItems: "center", cursor: "pointer" }}>
@@ -640,7 +664,7 @@ export default function Settings({ onBack }) {
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                           <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text)' }}>OCR Key</label>
-                          <input type={showKey ? 'text' : 'password'} value={settings.ocrApiKey} onChange={(e) => setSettings(prev => ({ ...prev, ocrApiKey: e.target.value }))} placeholder="可选"
+                          <input type={showKey ? 'text' : 'password'} value={settings.ocrApiKey === AI_SECURE_MARKER ? '' : settings.ocrApiKey} onChange={(e) => setSettings(prev => ({ ...prev, ocrApiKey: e.target.value }))} placeholder="已加密保存；可选"
                             style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid var(--line)', background: 'var(--surface)', fontSize: 13, outline: 'none', color: 'var(--text)' }}
                           />
                         </div>

@@ -21,22 +21,18 @@ import { actions, getState } from "./store/examStore.js";
 import { normalizeAISettings } from "./store/aiSettings.js";
 import appLogo from "./assets/openexam-logo.png";
 import { useDialog } from "./components/DialogProvider.jsx";
+import { BUILTIN_TRACK_CONFIG, normalizeExamTrack } from "../shared/examTracks.js";
+import {
+  buildTracksConfig,
+  getCategoryDisplay,
+  getTrackDefaultSubject,
+  getTrackFeatures,
+  resolveTrack,
+  resolveTrackLabel,
+} from "../shared/trackConfig.js";
 
 const EXAM_TRACK_STORAGE_KEY = "openexam_exam_track_v1";
 const EXAM_TRACK_SETTING_KEY = "exam_track";
-const EXAM_TRACK_OPTIONS = [
-  { key: "gongkao", label: "公务员" },
-  { key: "shiye", label: "事业单位" },
-];
-
-function normalizeExamTrack(input) {
-  const track = String(input || "").trim();
-  return EXAM_TRACK_OPTIONS.some((item) => item.key === track) ? track : "gongkao";
-}
-
-function getExamTrackLabel(track) {
-  return EXAM_TRACK_OPTIONS.find((item) => item.key === track)?.label || "公务员";
-}
 
 function PageView({ fullscreen = false, children, className = "" }) {
   return (
@@ -214,6 +210,31 @@ export default function App() {
       return "gongkao";
     }
   });
+  // 目标配置：数据库加载前先用内置默认兜底，加载后整体替换
+  const [tracksConfig, setTracksConfig] = useState(() => buildTracksConfig(BUILTIN_TRACK_CONFIG));
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const raw = await window.openexam?.db?.listTrackConfig?.();
+        if (mounted && raw?.tracks?.length) {
+          setTracksConfig(buildTracksConfig(raw));
+        }
+      } catch (error) {
+        console.error("加载目标配置失败:", error);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  const currentTrack = resolveTrack(tracksConfig, examTrack);
+  const trackLabel = currentTrack?.label || "未分类";
+  const trackFeatures = getTrackFeatures(tracksConfig, examTrack);
+  const trackSubject = getTrackDefaultSubject(tracksConfig, examTrack);
+  const hasFeature = (feature) => trackFeatures.includes(feature);
+  const practiceTabLabel = hasFeature("essay") ? "题库练习" : `${trackLabel}题库`;
+
   const [currentPaperId, setCurrentPaperId] = useState(null);
   const [examResult, setExamResult] = useState(null);
   const [resultReturnPage, setResultReturnPage] = useState("papers");
@@ -486,6 +507,7 @@ export default function App() {
     await window.openexam.db.savePracticeRecord({
       id: record.id,
       paperId: record.paper_id || record.paperId || null,
+      subject: record.subject || trackSubject,
       category: record.category || null,
       subCategory: record.sub_category || record.subCategory || null,
       startTime: record.start_time || record.startTime || new Date().toISOString(),
@@ -501,7 +523,12 @@ export default function App() {
     });
   };
 
-  const buildPracticeSessionKey = (category, subCategory = 'all') => `practice_${category}__${subCategory || 'all'}`;
+  // 非行测科目要带上 subject，否则不同类目的同名分类会共用一条未完成记录
+  const buildPracticeSessionKey = (category, subCategory = 'all', subject = 'xingce') => (
+    subject && subject !== 'xingce'
+      ? `practice_${subject}_${category}__${subCategory || 'all'}`
+      : `practice_${category}__${subCategory || 'all'}`
+  );
 
   const writeAIContext = (question, extra = {}) => {
     if (!question) return;
@@ -562,7 +589,7 @@ export default function App() {
         return;
       }
       setPracticeQuestions(questions);
-      setPracticeConfig({ mode: 'practice', title: paperTitle || 'AI 自定义练习', sourcePaperId: paperId });
+      setPracticeConfig({ mode: 'practice', title: paperTitle || 'AI 自定义练习', sourcePaperId: paperId, subject: trackSubject });
       setExamResumeRecord(resumeRecord || null);
       setResultReturnPage(returnPage);
       setPage("practice-exam");
@@ -619,7 +646,11 @@ export default function App() {
       return;
     }
 
-    const sessionKey = buildPracticeSessionKey(category, subCategory || 'all');
+    const sessionKey = buildPracticeSessionKey(
+      category,
+      subCategory || 'all',
+      trackSubject
+    );
     let resumeRecord = null;
     try { resumeRecord = await findResumableRecord(sessionKey); } catch (error) { console.error(error); }
     if (resumeRecord) {
@@ -648,7 +679,8 @@ export default function App() {
           category,
           subCategory,
           config?.questionCount || 10,
-          config?.shuffle !== false
+          config?.shuffle !== false,
+          { subject: trackSubject }
         );
       }
 
@@ -665,6 +697,7 @@ export default function App() {
         mode,
         category,
         subCategory,
+        subject: trackSubject,
         sourcePaperId: sessionKey,
         title: config?.title || `${titlePrefix} · ${category}`,
         durationMinutes: Number(config?.durationMinutes || Math.max(10, Math.ceil(questions.length * 1.2))),
@@ -678,6 +711,35 @@ export default function App() {
     }
   };
 
+  // 自适应练习：按弱项加权跨类目抽题
+  const handleStartAdaptivePractice = async () => {
+    if (!window.openexam?.db?.getAdaptiveQuestions) {
+      await showAlert({ title: '暂不支持', message: '当前版本不支持自适应抽题。', tone: 'warning' });
+      return;
+    }
+    try {
+      const questions = await window.openexam.db.getAdaptiveQuestions({ subject: trackSubject, limit: 20 });
+      if (!questions.length) {
+        await showAlert({ title: '暂无题目', message: '该目标的题库还没有可练习的题目，先导入或用 AI 出一套。', tone: 'info' });
+        return;
+      }
+      setPracticeQuestions(questions);
+      setPracticeConfig({
+        mode: 'practice',
+        title: `自适应练习 · ${questions.length} 题`,
+        category: 'adaptive',
+        subject: trackSubject,
+        sourcePaperId: `adaptive_${Date.now()}`,
+        durationMinutes: Math.max(10, Math.ceil(questions.length * 1.2)),
+      });
+      setExamResumeRecord(null);
+      setResultReturnPage('practice');
+      setPage('practice-exam');
+    } catch (error) {
+      await showAlert({ title: '抽题失败', message: error?.message || '请稍后重试', tone: 'danger' });
+    }
+  };
+
   const handleStartWrongRedo = async (questions, meta = {}) => {
     if (!Array.isArray(questions) || questions.length === 0) {
       await showAlert({ title: '暂无可重做题目', message: '当前筛选下没有可重做的错题。', tone: 'info' });
@@ -688,6 +750,7 @@ export default function App() {
       mode: 'wrong-redo',
       title: `错题重做（${questions.length}题）`,
       category: 'wrong-book',
+      subject: trackSubject,
       sourcePaperId: `wrong_redo_${meta.filter || 'all'}`,
       filter: meta.filter || 'all',
     });
@@ -722,6 +785,7 @@ export default function App() {
         title: meta.title || record.paper_title || '继续练习',
         category: record.category || null,
         subCategory: record.sub_category || null,
+        subject: record.subject || trackSubject,
         sourcePaperId: record.paper_id || buildPracticeSessionKey(record.category || 'mixed', record.sub_category || 'all'),
         durationMinutes: meta.durationMinutes,
       });
@@ -960,47 +1024,68 @@ export default function App() {
           </button>
           <div className="rail-icons">
             <div className="rail-slider" />
-            {/* 申论 */}
-            <button className={`rail-icon essay ${page === 'essay' ? 'active' : ''}`} data-tip="申论" onClick={() => { setActiveTab(''); setPage('essay'); }}>
+            {/* 题库：跟随顶部「目标」切换 */}
+            <button
+              className={`rail-icon practice ${page === 'practice' ? 'active' : ''}`}
+              data-tip={practiceTabLabel}
+              onClick={() => { setActiveTab('题库练习'); setPage('practice'); }}
+            >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/>
+                <path d="M4 6h16M4 12h16M4 18h10"/>
               </svg>
-              <span className="rail-icon-text">申论</span>
+              <span className="rail-icon-text">{practiceTabLabel}</span>
             </button>
+            {/* 申论：仅目标声明了 essay 模块才显示 */}
+            {hasFeature('essay') && (
+              <button className={`rail-icon essay ${page === 'essay' ? 'active' : ''}`} data-tip="申论" onClick={() => { setActiveTab(''); setPage('essay'); }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/>
+                </svg>
+                <span className="rail-icon-text">申论</span>
+              </button>
+            )}
             {/* 笔记 */}
-            <button className={`rail-icon notes ${page === 'notes' ? 'active' : ''}`} data-tip="笔记" onClick={() => { setActiveTab(''); setPage('notes'); }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                <polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="15" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/>
-              </svg>
-              <span className="rail-icon-text">笔记</span>
-            </button>
+            {hasFeature('notes') && (
+              <button className={`rail-icon notes ${page === 'notes' ? 'active' : ''}`} data-tip="笔记" onClick={() => { setActiveTab(''); setPage('notes'); }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="15" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/>
+                </svg>
+                <span className="rail-icon-text">笔记</span>
+              </button>
+            )}
             {/* 错题本 */}
-            <button className={`rail-icon wrong-book ${page === 'wrong-book' ? 'active' : ''}`} data-tip="错题本" onClick={() => { setActiveTab(''); setPage('wrong-book'); }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6m0-6l6 6"/>
-              </svg>
-              <span className="rail-icon-text">错题本</span>
-            </button>
+            {hasFeature('wrong') && (
+              <button className={`rail-icon wrong-book ${page === 'wrong-book' ? 'active' : ''}`} data-tip="错题本" onClick={() => { setActiveTab(''); setPage('wrong-book'); }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6m0-6l6 6"/>
+                </svg>
+                <span className="rail-icon-text">错题本</span>
+              </button>
+            )}
             {/* 分析报告 */}
-            <button className={`rail-icon analytics ${page === 'analytics' ? 'active' : ''}`} data-tip="分析报告" onClick={() => { setActiveTab(''); setPage('analytics'); }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M18 20V10M12 20V4M6 20v-6"/>
-              </svg>
-              <span className="rail-icon-text">分析报告</span>
-            </button>
+            {hasFeature('analytics') && (
+              <button className={`rail-icon analytics ${page === 'analytics' ? 'active' : ''}`} data-tip="分析报告" onClick={() => { setActiveTab(''); setPage('analytics'); }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 20V10M12 20V4M6 20v-6"/>
+                </svg>
+                <span className="rail-icon-text">分析报告</span>
+              </button>
+            )}
             {/* AI 老师 */}
-            <button className={`rail-icon ai-teacher ${page === 'ai-teacher' ? 'active' : ''}`} data-tip="AI 老师" onClick={() => { setActiveTab(''); setPage('ai-teacher'); }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2v10z"/>
-                <path d="M8 10h.01M12 10h.01M16 10h.01"/>
-              </svg>
-              <span className="rail-icon-text">AI 老师</span>
-            </button>
+            {hasFeature('ai') && (
+              <button className={`rail-icon ai-teacher ${page === 'ai-teacher' ? 'active' : ''}`} data-tip="AI 老师" onClick={() => { setActiveTab(''); setPage('ai-teacher'); }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2v10z"/>
+                  <path d="M8 10h.01M12 10h.01M16 10h.01"/>
+                </svg>
+                <span className="rail-icon-text">AI 老师</span>
+              </button>
+            )}
           </div>
           <div className="rail-divider" />
           <div className="rail-bottom">
-            <button className={`rail-bottom-icon home-icon ${!['wrong-book','analytics','ai-teacher','notes','essay'].includes(page) ? 'active' : ''}`} data-tip="工作区" onClick={() => { setActiveTab('今日'); setPage('today'); }}>
+            <button className={`rail-bottom-icon home-icon ${!['practice','wrong-book','analytics','ai-teacher','notes','essay'].includes(page) ? 'active' : ''}`} data-tip="工作区" onClick={() => { setActiveTab('今日'); setPage('today'); }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
                 <polyline points="9 22 9 12 15 12 15 22"/>
@@ -1034,23 +1119,34 @@ export default function App() {
                 </div>
               </button>
               <nav className="tabs">
-                {["今日", "学习中心", "题库练习", "模拟考试", "AI出卷", "我的成长"].map(tab => (
-                  <button key={tab} className={`tab ${activeTab === tab ? "active" : ""}`} onClick={() => handleTabChange(tab)}>
-                    {tab}
+                {[
+                  { key: "今日", label: "今日" },
+                  { key: "学习中心", label: "学习中心" },
+                  { key: "题库练习", label: practiceTabLabel },
+                  { key: "模拟考试", label: "模拟考试" },
+                  { key: "AI出卷", label: "AI出卷" },
+                  { key: "我的成长", label: "我的成长" },
+                ].map((tab) => (
+                  <button key={tab.key} className={`tab ${activeTab === tab.key ? "active" : ""}`} onClick={() => handleTabChange(tab.key)}>
+                    {tab.label}
                   </button>
                 ))}
               </nav>
             </div>
             <div className="header-actions">
               <div className="header-track">
-                <span className="header-track-label">类目</span>
+                <span className="header-track-label">目标</span>
                 <CustomSelect
                   compact
                   minWidth={92}
                   ariaLabel="切换考试类目"
                   value={examTrack}
-                  onChange={(next) => setExamTrack(normalizeExamTrack(next))}
-                  options={EXAM_TRACK_OPTIONS.map((item) => ({ value: item.key, label: item.label }))}
+                  onChange={(next) => {
+                    const track = normalizeExamTrack(next);
+                    setExamTrack(track);
+                    if (page === "practice" || page === "import") setPage("practice");
+                  }}
+                  options={tracksConfig.tracks.map((track) => ({ value: track.key, label: track.label }))}
                 />
               </div>
               <button className="search" type="button" onClick={handleOpenPaperSearch} title="搜索试卷">
@@ -1060,6 +1156,7 @@ export default function App() {
               </button>
               <HomeNotifyBell
                 examTrack={examTrack}
+                subject={trackSubject}
                 onStartRecommend={handleStartRecommend}
                 onOpenAnalytics={() => { setActiveTab(''); setPage('analytics'); }}
               />
@@ -1138,21 +1235,32 @@ export default function App() {
                   initialKeyword={paperSearchKeyword}
                   focusToken={paperSearchFocusToken}
                   examTrack={examTrack}
+                  tracksConfig={tracksConfig}
                   onGoAIGenerate={handleGoToAIGenerate}
+                  onImport={() => setPage("import")}
                 />
               ) : page === "practice" ? (
                 <PracticeModule
                   examTrack={examTrack}
+                  tracksConfig={tracksConfig}
                   onImport={() => setPage("import")}
                   onStartPractice={handleStartPractice}
+                  onAdaptivePractice={handleStartAdaptivePractice}
                   onHistory={() => setPage("history")}
                   onGoAIGenerate={handleGoToAIGenerate}
                 />
               ) : page === "history" ? (
-                <PracticeHistory onBack={() => setPage("practice")} onOpenRecord={handleOpenPracticeRecord} />
+                <PracticeHistory
+                  onBack={() => setPage("practice")}
+                  onOpenRecord={handleOpenPracticeRecord}
+                  subject={trackSubject}
+                  trackLabel={trackLabel}
+                />
               ) : page === "import" ? (
                 <ImportPaper
                   onBack={() => setPage("practice")}
+                  examTrack={examTrack}
+                  tracksConfig={tracksConfig}
                   onImportComplete={(data) => {
                     console.log('导入数据:', data);
                     setActiveTab('模拟考试');
@@ -1160,13 +1268,23 @@ export default function App() {
                   }}
                 />
               ) : page === "settings" ? (
-                <Settings onBack={() => setPage("home")} />
+                <Settings
+                  onBack={() => setPage("home")}
+                  tracksConfig={tracksConfig}
+                  onTracksConfigChange={(next) => setTracksConfig(buildTracksConfig(next))}
+                />
               ) : page === "ai-generate" ? (
-                <AIGenerate globalTrack={examTrack} onOpenPaper={(paper) => handleOpenPaper(paper, 'ai-generate')} />
+                <AIGenerate
+                  globalTrack={examTrack}
+                  tracksConfig={tracksConfig}
+                  onOpenPaper={(paper) => handleOpenPaper(paper, 'ai-generate')}
+                />
               ) : page === "ai-teacher" ? (
                 <AITeacher />
               ) : page === "wrong-book" ? (
                 <WrongBook
+                  subject={trackSubject}
+                  trackLabel={trackLabel}
                   onRedo={handleStartWrongRedo}
                   onAskAI={(item) => goAskAI({
                     id: item.question_id || item.id,
@@ -1180,7 +1298,12 @@ export default function App() {
                   }, { paperTitle: item.paper_title || '', prompt: '请讲解这道错题：指出我错在哪、正确思路是什么、再给一个变式。' })}
                 />
               ) : page === "analytics" ? (
-                <Analytics onOpenSettings={() => setPage("settings")} onStartRecommend={handleStartRecommend} onStartPractice={(category) => handleStartPractice(category, 'all', { questionCount: 10, mode: 'practice', shuffle: true })} />
+                <Analytics
+                  tracksConfig={tracksConfig}
+                  onOpenSettings={() => setPage("settings")}
+                  onStartRecommend={handleStartRecommend}
+                  onStartPractice={(category) => handleStartPractice(category, 'all', { questionCount: 10, mode: 'practice', shuffle: true })}
+                />
               ) : page === "growth" ? (
                 <GrowthCenter onOpenAchievements={() => { setActiveTab("我的成长"); setPage("achievements"); }} onStartPractice={() => { setActiveTab('题库练习'); setPage('practice'); }} />
               ) : page === "achievements" ? (
@@ -1188,6 +1311,7 @@ export default function App() {
               ) : (
                 <OriginalHomePage
                   examTrack={examTrack}
+                  tracksConfig={tracksConfig}
                   onGoAIGenerate={handleGoToAIGenerate}
                   onOpenPractice={() => { setActiveTab('题库练习'); setPage('practice'); }}
                   onOpenWrongBook={() => { setActiveTab(''); setPage('wrong-book'); }}
@@ -1208,7 +1332,7 @@ export default function App() {
 }
 
 // 右上角通知：承接今日推荐，不占首页主内容
-function HomeNotifyBell({ examTrack = "gongkao", onStartRecommend, onOpenAnalytics }) {
+function HomeNotifyBell({ examTrack = "gongkao", subject = "", onStartRecommend, onOpenAnalytics }) {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState([]);
   const hostRef = useRef(null);
@@ -1218,7 +1342,10 @@ function HomeNotifyBell({ examTrack = "gongkao", onStartRecommend, onOpenAnalyti
     (async () => {
       if (!window.openexam?.db?.getSmartRecommend) return;
       try {
-        const rec = await window.openexam.db.getSmartRecommend({ limit: 5 });
+        const rec = await window.openexam.db.getSmartRecommend({
+          limit: 5,
+          subject,
+        });
         if (!cancelled) setItems(Array.isArray(rec) ? rec : []);
       } catch (error) {
         console.error('加载推荐通知失败:', error);
@@ -1287,12 +1414,14 @@ function HomeNotifyBell({ examTrack = "gongkao", onStartRecommend, onOpenAnalyti
 }
 
 // 学习中心主页
-function OriginalHomePage({ examTrack = "gongkao", onGoAIGenerate, onOpenPractice, onOpenWrongBook, onOpenHistory, onOpenAnalytics, onStartRecommend, onStartCategory }) {
+function OriginalHomePage({ examTrack = "gongkao", tracksConfig, onGoAIGenerate, onOpenPractice, onOpenWrongBook, onOpenHistory, onOpenAnalytics, onStartRecommend, onStartCategory }) {
   const [stats, setStats] = useState({ totalQuestions: 0, totalDone: 0, accuracy: 0, wrongCount: 0, correctCount: 0, todayAdded: 0 });
   const [todayStats, setTodayStats] = useState({ total: 0, correct: 0, duration: 0 });
   const [categories, setCategories] = useState([]);
   const [dailyStats, setDailyStats] = useState([]);
   const [hoverDay, setHoverDay] = useState(null);
+
+  const trackSubject = getTrackDefaultSubject(tracksConfig, examTrack);
 
   useEffect(() => {
     const loadData = async () => {
@@ -1300,7 +1429,7 @@ function OriginalHomePage({ examTrack = "gongkao", onGoAIGenerate, onOpenPractic
       try {
         const [practiceStats, categoryStats, daily, today] = await Promise.all([
           window.openexam.db.getPracticeStats(),
-          window.openexam.db.getCategoryStats(),
+          window.openexam.db.getCategoryStats({ subject: trackSubject }),
           window.openexam.db.getDailyStats(7),
           window.openexam.db.getTodayStats?.() || Promise.resolve({ total: 0 }),
         ]);
@@ -1313,15 +1442,7 @@ function OriginalHomePage({ examTrack = "gongkao", onGoAIGenerate, onOpenPractic
       }
     };
     loadData();
-  }, [examTrack]);
-
-  const categoryNames = {
-    yanyu: '言语理解',
-    shuliang: '数量关系',
-    panduan: '判断推理',
-    ziliao: '资料分析',
-    changshi: '常识判断'
-  };
+  }, [examTrack, trackSubject]);
 
   const I = ({ d }) => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">{d}</svg>;
 
@@ -1334,9 +1455,11 @@ function OriginalHomePage({ examTrack = "gongkao", onGoAIGenerate, onOpenPractic
   };
 
   const totalQuestions = categories.reduce((sum, c) => sum + c.total, 0);
-  const trackLabel = getExamTrackLabel(examTrack);
-  const isDefaultTrack = examTrack === "gongkao";
-  const overallPct = totalQuestions > 0 ? Math.round((stats.totalDone / totalQuestions) * 100) : 0;
+  const trackDone = categories.reduce((sum, c) => sum + (c.done || 0), 0);
+  const trackLabel = resolveTrackLabel(tracksConfig, examTrack);
+  const trackHasBuiltin = Boolean(resolveTrack(tracksConfig, examTrack)?.builtin);
+  const hasTrackQuestions = totalQuestions > 0;
+  const overallPct = totalQuestions > 0 ? Math.min(100, Math.round((trackDone / totalQuestions) * 100)) : 0;
   const chartHasData = dailyStats.some((d) => Number(d.total) > 0);
 
   return (
@@ -1351,10 +1474,12 @@ function OriginalHomePage({ examTrack = "gongkao", onGoAIGenerate, onOpenPractic
               AI 出卷
             </button>
           </div>
-          {!isDefaultTrack && (
+          {!hasTrackQuestions && (
             <div className="home-inline-notice">
-              <span>当前类目「{trackLabel}」暂无内置题库，可先用 AI 出卷生成练习。</span>
-              <button type="button" onClick={() => onGoAIGenerate?.()}>去出卷</button>
+              <span>
+                「{trackLabel}」还没有题目。{trackHasBuiltin ? "" : "可以导入真题、试卷，或先让 AI 出一套。"}
+              </span>
+              <button type="button" onClick={() => onOpenPractice?.()}>去题库</button>
             </div>
           )}
         </header>
@@ -1434,7 +1559,7 @@ function OriginalHomePage({ examTrack = "gongkao", onGoAIGenerate, onOpenPractic
                   <div key={cat.category} className="home-dist-legend-item">
                     <span className={`home-dist-bar tone-${idx}`} />
                     <div>
-                      <span className="home-dist-name">{categoryNames[cat.category] || cat.category}</span>
+                      <span className="home-dist-name">{getCategoryDisplay(tracksConfig, cat.category).name}</span>
                       <strong>{cat.total.toLocaleString()} <em>道</em></strong>
                     </div>
                   </div>
@@ -1491,14 +1616,14 @@ function OriginalHomePage({ examTrack = "gongkao", onGoAIGenerate, onOpenPractic
           </div>
           <div className="home-side-progress-body">
             <div className="home-side-ring" style={{ background: `conic-gradient(var(--accent) ${overallPct * 3.6}deg, var(--accent-soft-bg) 0deg)` }}>
-              <div><strong>{isDefaultTrack ? `${overallPct}%` : "—"}</strong></div>
+              <div><strong>{totalQuestions > 0 ? `${overallPct}%` : "—"}</strong></div>
             </div>
             <div className="home-side-progress-copy">
-              <strong>{isDefaultTrack ? "整体完成度" : "本类目练习"}</strong>
+              <strong>{trackLabel}完成度</strong>
               <span>
-                {isDefaultTrack
-                  ? `已练 ${stats.totalDone.toLocaleString()} / ${totalQuestions.toLocaleString()} 题`
-                  : `已练 ${stats.totalDone.toLocaleString()} 题`}
+                {totalQuestions > 0
+                  ? `已练 ${trackDone.toLocaleString()} / ${totalQuestions.toLocaleString()} 题`
+                  : "本类目还没有题目"}
               </span>
               <span>今日 {Number(todayStats.total || 0)} 道 · 错题 {stats.wrongCount}</span>
             </div>
@@ -1507,15 +1632,16 @@ function OriginalHomePage({ examTrack = "gongkao", onGoAIGenerate, onOpenPractic
 
         <div className="home-side-banks">
           <div className="home-side-banks-head">
-            <h4>{isDefaultTrack ? "热门题库" : "练习入口"}</h4>
-            {isDefaultTrack ? (
-              <button type="button" onClick={() => onOpenPractice?.()}>全部 {categories.length} &gt;</button>
-            ) : (
-              <button type="button" onClick={() => onGoAIGenerate?.()}>AI 出卷 &gt;</button>
-            )}
+            <h4>{trackLabel}题库</h4>
+            <button type="button" onClick={() => onOpenPractice?.()}>全部 {categories.length} &gt;</button>
           </div>
           <div className="home-side-banks-list">
-            {isDefaultTrack ? categories.map((cat, i) => {
+            {categories.length === 0 ? (
+              <div className="home-side-bank-empty">
+                <p>还没有{trackLabel}题目</p>
+                <button type="button" onClick={() => onOpenPractice?.()}>去导入题目</button>
+              </div>
+            ) : categories.map((cat, i) => {
               const pct = typeof cat.accuracy === 'number' && cat.answered > 0
                 ? cat.accuracy
                 : (cat.total > 0 ? Math.round(((cat.done || 0) / cat.total) * 100) : 0);
@@ -1527,7 +1653,7 @@ function OriginalHomePage({ examTrack = "gongkao", onGoAIGenerate, onOpenPractic
                   <span className="home-side-icon">{categoryIcons[cat.category] || <I d={<circle cx="12" cy="12" r="10"/>} />}</span>
                   <div className="home-side-bank-copy">
                     <div className="home-side-bank-top">
-                      <span>{categoryNames[cat.category] || cat.category}</span>
+                      <span>{getCategoryDisplay(tracksConfig, cat.category).name}</span>
                       <span><b>{cat.done || 0}</b>/{cat.total.toLocaleString()}</span>
                     </div>
                     <div className="home-side-bank-bar">
@@ -1539,12 +1665,7 @@ function OriginalHomePage({ examTrack = "gongkao", onGoAIGenerate, onOpenPractic
                   </div>
                 </button>
               );
-            }) : (
-              <div className="home-side-bank-empty">
-                <p>当前类目暂无内置题库</p>
-                <button type="button" onClick={() => onGoAIGenerate?.()}>去 AI 出卷</button>
-              </div>
-            )}
+            })}
           </div>
         </div>
 

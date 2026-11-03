@@ -2,22 +2,38 @@ import React, { useEffect, useRef, useState } from "react";
 import { getAISettings, isAIConfigured } from "../store/aiSettings.js";
 import { buildPaperShareText, copyText } from "../utils/paperShare.js";
 import { useDialog } from "../components/DialogProvider.jsx";
+import { EXAM_TRACKS as EXAM_TRACK_DEFS } from "../../shared/examTracks.js";
+import {
+  getCategoryDisplay,
+  getTrackCategories,
+  getTrackDefaultSubject,
+  resolveTrackLabel,
+} from "../../shared/trackConfig.js";
+import { CATEGORY_META } from "../../shared/categoryMeta.js";
 
-const CATEGORIES = [
-  { key: "yanyu", name: "言语理解" }, { key: "shuliang", name: "数量关系" },
-  { key: "panduan", name: "判断推理" }, { key: "ziliao", name: "资料分析" },
-  { key: "changshi", name: "常识判断" },
-];
-const DEFAULT_MIXED_CATEGORIES = CATEGORIES.map((item) => item.key);
+const ALL_CATEGORIES = Object.keys(CATEGORY_META).map((key) => ({
+  key,
+  name: CATEGORY_META[key]?.name || key,
+}));
+
+// 出卷分类跟着当前目标走，避免在软考类目下出成行测题
+const getCategoriesForTrack = (track = "gongkao", config) => {
+  const list = getTrackCategories(config, track).map((key) => ({
+    key,
+    name: getCategoryDisplay(config, key).name,
+  }));
+  return list.length ? list : ALL_CATEGORIES;
+};
+
+const CATEGORIES = ALL_CATEGORIES;
+const DEFAULT_MIXED_CATEGORIES = getCategoriesForTrack("gongkao").map((item) => item.key);
 const EXAM_TRACKS = [
-  { key: "gongkao", name: "考公" },
-  { key: "shiye", name: "事业单位" },
+  ...EXAM_TRACK_DEFS.map((track) => ({ key: track.key, name: track.label })),
   { key: "kaoyan", name: "考研" },
   { key: "self", name: "自定义备考" },
 ];
 const TRACK_SUBJECTS = {
-  gongkao: "xingce",
-  shiye: "shiye",
+  ...Object.fromEntries(EXAM_TRACK_DEFS.map((track) => [track.key, track.defaultSubject])),
   kaoyan: "kaoyan",
   self: "custom",
 };
@@ -79,9 +95,9 @@ function getSavedPaperMeta(type) {
   };
 }
 
-function getTrackLabel(track, customTrackName = "") {
+function getTrackLabel(track, customTrackName = "", config) {
   if (track === "self") return String(customTrackName || "自定义备考").trim() || "自定义备考";
-  return EXAM_TRACKS.find((item) => item.key === track)?.name || track || "未分类";
+  return resolveTrackLabel(config, track, "") || EXAM_TRACKS.find((item) => item.key === track)?.name || track || "未分类";
 }
 
 function getFocusLabel(focus, customFocusName = "") {
@@ -89,25 +105,25 @@ function getFocusLabel(focus, customFocusName = "") {
   return FOCUS_PRESETS.find((item) => item.key === focus)?.name || focus || "通用组卷";
 }
 
-function getPaperSubject(config = {}) {
+function getPaperSubject(config = {}, tracksConfig) {
   if (config.track === "self") {
     const customSubject = String(config.customTrackName || "").trim();
     return customSubject || TRACK_SUBJECTS.self;
   }
-  return TRACK_SUBJECTS[config.track] || "xingce";
+  return getTrackDefaultSubject(tracksConfig, config.track) || TRACK_SUBJECTS[config.track] || "xingce";
 }
 
-function getGeneratedTitle(config = {}) {
-  const trackLabel = getTrackLabel(config.track, config.customTrackName);
+function getGeneratedTitle(config = {}, tracksConfig) {
+  const trackLabel = getTrackLabel(config.track, config.customTrackName, tracksConfig);
   const focusLabel = getFocusLabel(config.focus, config.customFocusName);
   const modeLabel = config.mode === "mixed"
     ? "综合组卷"
-    : (CATEGORIES.find((item) => item.key === config.category)?.name || "专项");
+    : (getCategoriesForTrack(config.track, tracksConfig).find((item) => item.key === config.category)?.name || "专项");
   const difficultyLabel = DIFFICULTIES.find((item) => item.value === config.difficulty)?.label || "中等";
   return `${trackLabel} · ${focusLabel} · ${modeLabel} · ${difficultyLabel}`;
 }
 
-export default function AIGenerate({ onOpenPaper, globalTrack = "" }) {
+export default function AIGenerate({ onOpenPaper, globalTrack = "", tracksConfig }) {
   const [config, setConfig] = useState({
     track: "gongkao",
     customTrackName: "",
@@ -186,7 +202,16 @@ export default function AIGenerate({ onOpenPaper, globalTrack = "" }) {
 
   useEffect(() => {
     if (!globalTrack) return;
-    setConfig((prev) => (prev.track === globalTrack ? prev : { ...prev, track: globalTrack }));
+    setConfig((prev) => {
+      if (prev.track === globalTrack) return prev;
+      const categories = getCategoriesForTrack(globalTrack, tracksConfig);
+      return {
+        ...prev,
+        track: globalTrack,
+        category: categories[0]?.key || prev.category,
+        mixedCategories: categories.map((item) => item.key),
+      };
+    });
   }, [globalTrack]);
 
   const handleGenerate = async () => {
@@ -241,9 +266,9 @@ export default function AIGenerate({ onOpenPaper, globalTrack = "" }) {
     try {
       const settings = getAISettings();
       const categoryText = config.mode === "mixed"
-        ? config.mixedCategories.map((key) => CATEGORIES.find((c) => c.key === key)?.name || key).join("、")
-        : (CATEGORIES.find((c) => c.key === config.category)?.name || config.category);
-      pushFeedback("info", `参数已提交：${getTrackLabel(config.track, config.customTrackName)} / ${config.count}题 / ${categoryText}`);
+        ? config.mixedCategories.map((key) => getCategoryDisplay(tracksConfig, key).name).join("、")
+        : getCategoryDisplay(tracksConfig, config.category).name;
+      pushFeedback("info", `参数已提交：${getTrackLabel(config.track, config.customTrackName, tracksConfig)} / ${config.count}题 / ${categoryText}`);
       const result = await window.openexam.ai.generatePaper(settings, config);
       if (generationTokenRef.current !== token) return;
       if (result.success && result.questions?.length) {
@@ -255,7 +280,7 @@ export default function AIGenerate({ onOpenPaper, globalTrack = "" }) {
         showToast({ title: "生成成功", message: `共生成 ${result.questions.length} 道题目。`, tone: "success" });
         setGenerated({
           questions: result.questions,
-          title: getGeneratedTitle(config),
+          title: getGeneratedTitle(config, tracksConfig),
           count: result.questions.length,
           time: new Date().toLocaleString(),
         });
@@ -288,7 +313,7 @@ export default function AIGenerate({ onOpenPaper, globalTrack = "" }) {
       year: new Date().getFullYear(),
       duration: Math.max(20, (generated?.count || 0) * 2),
       type: "ai_exam",
-      subject: getPaperSubject(config),
+      subject: getPaperSubject(config, tracksConfig),
       question_count: generated?.count || 0,
       difficulty: config.difficulty,
     },
@@ -308,7 +333,7 @@ export default function AIGenerate({ onOpenPaper, globalTrack = "" }) {
       const r = await window.openexam.db.saveAIPaper({
         title,
         year: new Date().getFullYear(),
-        subject: getPaperSubject(config),
+        subject: getPaperSubject(config, tracksConfig),
         category: config.mode === "mixed" ? "mixed" : config.category,
         subCategory: config.focus,
         difficulty: config.difficulty,
@@ -513,14 +538,25 @@ export default function AIGenerate({ onOpenPaper, globalTrack = "" }) {
               <label style={{ display: "block", fontSize: 11, fontWeight: 500, color: "var(--text)", marginBottom: 8 }}>考试类目</label>
               {globalTrack ? (
                 <div style={{ fontSize: 11, color: "var(--accent)", background: "var(--accent-soft-bg)", border: "1px solid var(--accent-border-soft)", borderRadius: 8, padding: "7px 9px" }}>
-                  当前使用全局类目：{getTrackLabel(config.track, config.customTrackName)}
+                  当前使用全局类目：{getTrackLabel(config.track, config.customTrackName, tracksConfig)}
                 </div>
               ) : (
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                {EXAM_TRACKS.map((item) => (
+                {(tracksConfig?.tracks?.length
+                  ? tracksConfig.tracks.map((track) => ({ key: track.key, name: track.label }))
+                  : EXAM_TRACKS
+                ).map((item) => (
                   <button
                     key={item.key}
-                    onClick={() => setConfig((prev) => ({ ...prev, track: item.key }))}
+                    onClick={() => setConfig((prev) => {
+                      const categories = getCategoriesForTrack(item.key, tracksConfig);
+                      return {
+                        ...prev,
+                        track: item.key,
+                        category: categories[0]?.key || prev.category,
+                        mixedCategories: categories.map((c) => c.key),
+                      };
+                    })}
                     style={{
                       fontSize: 11,
                       padding: "4px 10px",
@@ -610,7 +646,7 @@ export default function AIGenerate({ onOpenPaper, globalTrack = "" }) {
                 {config.mode === "mixed" ? "综合题型覆盖" : "题目分类"}
               </label>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                {CATEGORIES.map((item) => {
+                {getCategoriesForTrack(config.track, tracksConfig).map((item) => {
                   const active = config.mode === "mixed"
                     ? config.mixedCategories.includes(item.key)
                     : config.category === item.key;

@@ -4,16 +4,13 @@ import { getState } from '../store/examStore.js';
 import { useAchievementUnlock } from '../components/AchievementUnlockCeremony.jsx';
 import { normalizeAchievements } from '../utils/achievementUtils.js';
 import { diffNewlyUnlocked } from '../utils/achievementUnlock.js';
+import { CATEGORY_META } from '../../shared/categoryMeta.js';
 
-const categoryNames = {
-  yanyu: '言语理解',
-  shuliang: '数量关系',
-  panduan: '判断推理',
-  ziliao: '资料分析',
-  changshi: '常识判断'
-};
+const categoryNames = Object.fromEntries(
+  Object.entries(CATEGORY_META).map(([key, meta]) => [key, meta.name])
+);
 
-const categoryOrder = ['yanyu', 'shuliang', 'panduan', 'ziliao', 'changshi'];
+const categoryOrder = Object.keys(CATEGORY_META);
 
 const toMultipleKeys = (value) => {
   if (Array.isArray(value)) return [...new Set(value.map(v => String(v || '').trim()).filter(Boolean))].sort();
@@ -192,17 +189,25 @@ export default function ExamResult({ result, onBack, onRedoWrong, onPracticeWeak
   const historyDelta = accuracy - historyAccuracy;
   const historyReady = Boolean(historyStats?.totalDone);
 
-  const categoryRows = categoryOrder.map(cat => {
-    const stat = categoryStats[cat] || { total: 0, correct: 0 };
-    const pct = stat.total > 0 ? Math.round((stat.correct / stat.total) * 100) : 0;
-    return {
-      key: cat,
-      name: categoryNames[cat],
-      total: stat.total,
-      correct: stat.correct,
-      pct
-    };
-  });
+  const statKeys = Object.keys(categoryStats || {});
+  const orderedKeys = [
+    ...categoryOrder.filter((key) => statKeys.includes(key)),
+    ...statKeys.filter((key) => !categoryOrder.includes(key)),
+  ];
+
+  const categoryRows = orderedKeys
+    .map(cat => {
+      const stat = categoryStats[cat] || { total: 0, correct: 0 };
+      const pct = stat.total > 0 ? Math.round((stat.correct / stat.total) * 100) : 0;
+      return {
+        key: cat,
+        name: categoryNames[cat] || cat,
+        total: stat.total,
+        correct: stat.correct,
+        pct
+      };
+    })
+    .filter(item => item.total > 0);
 
   const weakCategories = categoryRows.filter(item => item.total > 0 && item.pct < 60);
   const chartTrend = trendData.length ? trendData : [accuracy];

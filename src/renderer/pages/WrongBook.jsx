@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import RichQuestionContent from "../components/RichQuestionContent.jsx";
+import { CATEGORY_META } from "../../shared/categoryMeta.js";
+import { WRONG_CAUSES, getWrongCauseLabel, getWrongCauseMeta } from "../constants/wrongCauses.js";
 
-const CN = { yanyu: "言语理解", shuliang: "数量关系", panduan: "判断推理", ziliao: "资料分析", changshi: "常识判断" };
+const CN = Object.fromEntries(Object.entries(CATEGORY_META).map(([key, meta]) => [key, meta.name]));
 const FILTERS = [{ key: "due", label: "待复习" }, { key: "all", label: "全部" }, { key: "learning", label: "熟悉中" }, { key: "mastered", label: "已掌握" }];
 const STAGES = [
   { name: "新错题", color: "var(--danger)" },
@@ -36,16 +38,18 @@ const normalizeOptions = (options) => Array.isArray(options) ? options.map((opt)
   content: String(opt?.content || ""),
 })).filter((opt) => opt.key) : [];
 
-export default function WrongBook({ onRedo, onAskAI }) {
-  const [list, setList] = useState([]), [loading, setLoading] = useState(true), [filter, setFilter] = useState("due"), [expandedId, setExpandedId] = useState(null), [busyId, setBusyId] = useState(""), [error, setError] = useState("");
+export default function WrongBook({ onRedo, onAskAI, subject = "", trackLabel = "" }) {
+  const [list, setList] = useState([]), [loading, setLoading] = useState(true), [filter, setFilter] = useState("due"), [causeFilter, setCauseFilter] = useState("all"), [expandedId, setExpandedId] = useState(null), [busyId, setBusyId] = useState(""), [error, setError] = useState("");
   const loadList = async () => {
     if (!window.openexam?.db?.getWrongQuestions) return setLoading(false);
     setLoading(true); setError("");
-    try { const rows = await window.openexam.db.getWrongQuestions(); setList((rows || []).sort(sortByUrgency)); }
-    catch (e) { setError(e.message || "错题读取失败"); }
+    try {
+      const rows = await window.openexam.db.getWrongQuestions(subject ? { subject } : undefined);
+      setList((rows || []).sort(sortByUrgency));
+    } catch (e) { setError(e.message || "错题读取失败"); }
     setLoading(false);
   };
-  useEffect(() => { loadList(); }, []);
+  useEffect(() => { loadList(); }, [subject]);
 
   const stats = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10); const catCount = {};
@@ -54,7 +58,41 @@ export default function WrongBook({ onRedo, onAskAI }) {
     return { due: list.filter((item) => item.is_due).length, today: list.filter((item) => String(item.added_at || "").startsWith(today)).length, mastered: list.filter((item) => (item.review_stage || 0) >= STAGES.length - 1 && !item.is_due).length, weakest: weakest ? CN[weakest[0]] || weakest[0] : "暂无" };
   }, [list]);
 
-  const filtered = useMemo(() => list.filter((item) => filter === "all" || (filter === "due" && item.is_due) || (filter === "learning" && !item.is_due && (item.review_stage || 0) < STAGES.length - 1) || (filter === "mastered" && !item.is_due && (item.review_stage || 0) >= STAGES.length - 1)).sort(sortByUrgency), [list, filter]);
+  const causeCounts = useMemo(() => {
+    const counts = { unlabeled: 0 };
+    list.forEach((item) => {
+      const cause = String(item.cause || '').trim();
+      if (!cause) counts.unlabeled += 1;
+      else counts[cause] = (counts[cause] || 0) + 1;
+    });
+    return counts;
+  }, [list]);
+
+  const filtered = useMemo(() => list.filter((item) => {
+    const statusMatch = filter === 'all'
+      || (filter === 'due' && item.is_due)
+      || (filter === 'learning' && !item.is_due && (item.review_stage || 0) < STAGES.length - 1)
+      || (filter === 'mastered' && !item.is_due && (item.review_stage || 0) >= STAGES.length - 1);
+    if (!statusMatch) return false;
+
+    if (causeFilter !== 'all') {
+      const cause = String(item.cause || '').trim();
+      if (causeFilter === 'unlabeled') return cause === '';
+      if (cause !== causeFilter) return false;
+    }
+    return true;
+  }).sort(sortByUrgency), [list, filter, causeFilter]);
+
+  const updateCause = async (item, cause) => {
+    setBusyId(`${item.id}:cause`);
+    try {
+      const updated = await window.openexam.db.setWrongQuestionCause(item.question_id, cause);
+      setList((prev) => prev.map((row) => (row.id === updated.id ? { ...row, cause: updated.cause } : row)));
+    } catch (e) {
+      setError(e.message || '错因保存失败');
+    }
+    setBusyId('');
+  };
   const startRedo = (sourceList, filterOverride) => {
     if (typeof onRedo !== "function") return;
     const source = Array.isArray(sourceList) && sourceList.length
@@ -110,7 +148,9 @@ export default function WrongBook({ onRedo, onAskAI }) {
   return (
     <section className="main-panel" style={{ padding: "0 22px 22px", display: "flex", flexDirection: "column", gap: 20, overflow: "auto", height: "100%", boxSizing: "border-box" }}>
       <header style={{ padding: "16px 0 0", display: "flex", flexDirection: "column", gap: 14 }}>
-        <div className="breadcrumb" style={{ margin: 0 }}>我的 &gt; 错题本</div>
+        <div className="breadcrumb" style={{ margin: 0 }}>
+          我的 &gt; 错题本{trackLabel ? ` · ${trackLabel}` : ""}
+        </div>
         <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap", paddingBottom: 14, borderBottom: "1px solid var(--line)" }}>
           <div>
             <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 6 }}>今日复习台</div>
@@ -174,6 +214,33 @@ export default function WrongBook({ onRedo, onAskAI }) {
               {item.label}
             </button>
           ))}
+          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", paddingBottom: 6 }}>
+            <span style={{ fontSize: 11, color: "var(--muted)" }}>错因</span>
+            {[{ key: "all", label: "全部" }, { key: "unlabeled", label: `未标注${causeCounts.unlabeled ? ` ${causeCounts.unlabeled}` : ""}` }]
+              .concat(WRONG_CAUSES.filter((item) => causeCounts[item.key]).map((item) => ({ key: item.key, label: `${item.label} ${causeCounts[item.key]}`, color: item.color })))
+              .map((item) => {
+                const active = causeFilter === item.key;
+                return (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => setCauseFilter(item.key)}
+                    style={{
+                      padding: "3px 10px",
+                      borderRadius: 999,
+                      border: `1px solid ${active ? "var(--accent)" : "var(--line)"}`,
+                      background: active ? "var(--accent-soft-bg)" : "transparent",
+                      color: active ? "var(--accent)" : item.color || "var(--muted)",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {item.label}
+                  </button>
+                );
+              })}
+          </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <div style={{ fontSize: 12, color: "var(--muted)" }}>按紧急度排序 · {filtered.length} 道</div>
@@ -207,7 +274,7 @@ export default function WrongBook({ onRedo, onAskAI }) {
         <div style={{ padding: "80px 0", textAlign: "center", color: "var(--muted)" }}>错题加载中…</div>
       ) : filtered.length === 0 ? (
         <div style={{ padding: "72px 0", textAlign: "center", color: "var(--muted)", borderTop: "1px dashed var(--line)", borderBottom: "1px dashed var(--line)" }}>
-          当前筛选下暂无错题，状态很棒。
+          {trackLabel ? `「${trackLabel}」当前筛选下暂无错题，状态很棒。` : '当前筛选下暂无错题，状态很棒。'}
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column" }}>
@@ -224,6 +291,20 @@ export default function WrongBook({ onRedo, onAskAI }) {
                       <span style={{ color: "var(--text)", fontWeight: 700 }}>{CN[item.category] || item.category || "综合"}</span>
                       <span style={{ color: meta.color, fontWeight: 600 }}>{meta.name}</span>
                       <span style={{ color: item.is_due ? "var(--accent)" : "var(--muted)", fontWeight: 600 }}>{item.is_due ? "待处理" : formatTime(item.next_review_at, item.is_due)}</span>
+                      {String(item.cause || "").trim() && (
+                        <span
+                          style={{
+                            padding: "1px 8px",
+                            borderRadius: 999,
+                            fontSize: 10.5,
+                            fontWeight: 600,
+                            color: getWrongCauseMeta(item.cause)?.color || "var(--text)",
+                            border: `1px solid ${getWrongCauseMeta(item.cause)?.color || "var(--line)"}`,
+                          }}
+                        >
+                          {getWrongCauseLabel(item.cause)}
+                        </span>
+                      )}
                       <span style={{ marginLeft: "auto", color: "var(--muted)" }}>{item.paper_title || "未关联试卷"}</span>
                     </div>
                     <div style={{ fontSize: 14, lineHeight: 1.75, color: "var(--text)", fontWeight: 600 }}>
@@ -251,6 +332,39 @@ export default function WrongBook({ onRedo, onAskAI }) {
                 </button>
                 {open && (
                   <div style={{ borderTop: "1px solid var(--line)", padding: "0 0 18px", display: "flex", flexDirection: "column", gap: 14 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)" }}>错因</span>
+                      {WRONG_CAUSES.map((item) => {
+                        const active = String(item.cause || "").trim() === item.key;
+                        const busy = busyId === `${item.id}:cause`;
+                        return (
+                          <button
+                            key={item.key}
+                            type="button"
+                            title={item.desc}
+                            onClick={() => updateCause(item, active ? "" : item.key)}
+                            disabled={busy || !!busyId}
+                            style={{
+                              padding: "3px 10px",
+                              borderRadius: 999,
+                              border: `1px solid ${active ? item.color : "var(--line)"}`,
+                              background: active ? "var(--surface-soft)" : "transparent",
+                              color: active ? item.color : "var(--muted)",
+                              fontSize: 11,
+                              fontWeight: 600,
+                              cursor: busy ? "wait" : "pointer",
+                            }}
+                          >
+                            {item.label}
+                          </button>
+                        );
+                      })}
+                      {String(item.cause || "").trim() && !WRONG_CAUSES.some((c) => c.key === item.cause) && (
+                        <span style={{ fontSize: 11, color: "var(--text)", border: "1px solid var(--line)", borderRadius: 999, padding: "3px 10px" }}>
+                          {item.cause}
+                        </span>
+                      )}
+                    </div>
                     {Array.isArray(item.options) && item.options.length > 0 && (
                       <div style={{ display: "grid", gap: 0, marginTop: 12 }}>
                         {item.options.map((opt) => (

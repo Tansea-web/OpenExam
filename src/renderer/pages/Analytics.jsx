@@ -1,12 +1,16 @@
 import React, { useEffect, useState } from "react";
 import { getAISettings, isAIConfigured } from "../store/aiSettings.js";
+import { getCategoryDisplay } from "../../shared/trackConfig.js";
+import { CATEGORY_META } from "../../shared/categoryMeta.js";
 
-const CN = {
-  yanyu: "言语理解",
-  shuliang: "数量关系",
-  panduan: "判断推理",
-  ziliao: "资料分析",
-  changshi: "常识判断",
+const CN = Object.fromEntries(Object.entries(CATEGORY_META).map(([key, meta]) => [key, meta.name]));
+
+// papers.subject → 显示名，统计页跨科目展示用
+const SUBJECT_LABELS = {
+  xingce: '行测',
+  shenlun: '申论',
+  shiye: '事业单位',
+  computer: '软考·网络工程师',
 };
 
 const PALETTES = {
@@ -161,12 +165,13 @@ function StackedBar({ correct, wrong, total }) {
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
-export default function Analytics({ onOpenSettings, onStartRecommend, onStartPractice }) {
+export default function Analytics({ onOpenSettings, onStartRecommend, onStartPractice, tracksConfig }) {
   const [stats, setStats] = useState({
     totalQuestions: 0, totalDone: 0, accuracy: 0,
     wrongCount: 0, correctCount: 0,
   });
   const [categories, setCategories] = useState([]);
+  const [subjectStats, setSubjectStats] = useState([]);
   const [recommend, setRecommend] = useState([]);
   const [diagnosis, setDiagnosis] = useState("");
   const [diagnosisLoading, setDiagnosisLoading] = useState(false);
@@ -176,14 +181,16 @@ export default function Analytics({ onOpenSettings, onStartRecommend, onStartPra
     (async () => {
       if (!window.openexam?.db) return;
       try {
-        const [s, c, r] = await Promise.all([
+        const [s, c, r, subjects] = await Promise.all([
           window.openexam.db.getPracticeStats(),
           window.openexam.db.getCategoryStats(),
           window.openexam.db.getSmartRecommend?.({ limit: 4 }) || Promise.resolve([]),
+          window.openexam.db.getSubjectStats?.() || Promise.resolve([]),
         ]);
         setStats(s);
         setCategories(c);
         setRecommend(Array.isArray(r) ? r : []);
+        setSubjectStats(Array.isArray(subjects) ? subjects : []);
       } catch (e) { console.error(e); }
     })();
   }, []);
@@ -199,7 +206,7 @@ export default function Analytics({ onOpenSettings, onStartRecommend, onStartPra
         ? c.accuracy
         : (c.total > 0 ? Math.round(((c.done || 0) / c.total) * 100) : 0);
       return {
-        name: CN[c.category] || c.category,
+        name: getCategoryDisplay(tracksConfig, c.category).name,
         category: c.category,
         pct: mastery,
         completion: c.total > 0 ? Math.round(((c.done || 0) / c.total) * 100) : 0,
@@ -313,6 +320,43 @@ export default function Analytics({ onOpenSettings, onStartRecommend, onStartPra
             <StatCard key={c.label} {...c} />
           ))}
         </div>
+
+        {/* Row 1.5 — 全部科目的学习情况（不随目标切换） */}
+        {subjectStats.length > 0 && (
+          <div>
+            <SectionHead
+              icon={ICONS.book}
+              title="各科目学习情况"
+              iconColor="var(--info)"
+              iconBg="var(--info-soft)"
+              action={<span style={{ fontSize: 11, color: "var(--muted)" }}>统计全部题库，不随目标切换</span>}
+            />
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginTop: 12 }}>
+              {subjectStats.map((row) => {
+                const subjectDef = tracksConfig?.subjects?.find((item) => item.key === row.subject);
+                const label = subjectDef?.label || SUBJECT_LABELS[row.subject] || row.subject;
+                const pct = row.total > 0
+                  ? Math.min(100, Math.round(((row.done || 0) / row.total) * 100))
+                  : 0;
+                return (
+                  <div key={row.subject} style={{ border: "1px solid var(--line)", borderRadius: 12, padding: "12px 14px", background: "var(--surface)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+                      <span style={{ fontSize: 13, fontWeight: 650, color: "var(--text)" }}>{label}</span>
+                      <span style={{ fontSize: 11, color: "var(--muted)" }}>{row.total.toLocaleString()} 题</span>
+                    </div>
+                    <div style={{ height: 5, background: "var(--neutral-soft-bg)", borderRadius: 10, overflow: "hidden" }}>
+                      <div style={{ width: `${pct}%`, height: "100%", background: "var(--accent)", borderRadius: 10 }} />
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, fontSize: 11, color: "var(--muted)" }}>
+                      <span>已做 <b style={{ color: "var(--text)" }}>{row.done}</b></span>
+                      <span>正确率 <b style={{ color: "var(--success)" }}>{row.accuracy}%</b></span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {recommend.length > 0 && (
           <div className="home-recommend analytics-recommend">

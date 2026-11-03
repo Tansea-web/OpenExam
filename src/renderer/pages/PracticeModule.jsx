@@ -1,59 +1,25 @@
 import React, { useState, useEffect } from 'react';
+import {
+  getCategoryDisplay,
+  getTrackCategories,
+  getTrackDefaultSubject,
+  resolveTrackLabel,
+} from '../../shared/trackConfig.js';
+import { getSubCategoryName } from '../../shared/categoryMeta.js';
 
-// 分类配置
-const categoryConfig = {
-  yanyu: { name: '言语理解', color: 'var(--category-yanyu)' },
-  shuliang: { name: '数量关系', color: 'var(--category-shuliang)' },
-  panduan: { name: '判断推理', color: 'var(--category-panduan)' },
-  ziliao: { name: '资料分析', color: 'var(--category-ziliao)' },
-  changshi: { name: '常识判断', color: 'var(--category-changshi)' },
-};
-
-// 默认子分类配置
+// 默认子分类配置；没有配置的类目直接用分类 key 当子分类
 const defaultSubCategories = {
   yanyu: ['xuanci', 'yueduan', 'yuju', 'wenzhang'],
   shuliang: ['jisuan', 'tuili'],
   panduan: ['tuxing', 'dingyi', 'leibi', 'luoji'],
   ziliao: ['wenzi', 'biaoge', 'tubiao', 'zonghe', 'zengzhang'],
   changshi: ['zhengzhi', 'jingji', 'falv', 'keji', 'renwen', 'dili'],
-};
-
-const TRACK_LABELS = {
-  gongkao: '考公',
-  shiye: '事业单位',
-  kaoyan: '考研',
-  self: '自定义',
-};
-
-// 子分类中文映射
-const subCategoryNames = {
-  // 言语理解
-  xuanci: '选词填空',
-  yueduan: '片段阅读',
-  yuju: '语句表达',
-  wenzhang: '文章阅读',
-  // 数量关系
-  jisuan: '数学运算',
-  tuili: '数字推理',
-  // 判断推理
-  tuxing: '图形推理',
-  dingyi: '定义判断',
-  leibi: '类比推理',
-  luoji: '逻辑判断',
-  // 资料分析
-  wenzi: '文字资料',
-  biaoge: '表格资料',
-  tubiao: '图形资料',
-  zonghe: '综合资料',
-  zengzhang: '增长率',
-  // 常识判断
-  zhengzhi: '政治',
-  jingji: '经济',
-  falv: '法律',
-  keji: '科技',
-  renwen: '人文',
-  dili: '地理',
-  gongcheng: '工程问题',
+  cs_net: ['cs_net'],
+  cs_base: ['cs_base'],
+  cs_security: ['cs_security'],
+  cs_os: ['cs_os'],
+  cs_db: ['cs_db'],
+  cs_prog: ['cs_prog'],
 };
 
 // 简约图标组件
@@ -98,10 +64,9 @@ const Icons = {
 // 检查是否在 Electron 环境
 const isElectron = () => window.openexam?.db;
 
-export default function PracticeModule({ onStartPractice, onImport, onHistory, examTrack = 'gongkao', onGoAIGenerate }) {
+export default function PracticeModule({ onStartPractice, onImport, onHistory, examTrack = 'gongkao', tracksConfig, onGoAIGenerate, onAdaptivePractice }) {
   const [expandedId, setExpandedId] = useState(null);
   const [modules, setModules] = useState([]);
-  const [stats, setStats] = useState({ totalQuestions: 0, totalDone: 0, accuracy: 0, wrongCount: 0 });
   const [subCategories, setSubCategories] = useState({});
   const [loading, setLoading] = useState(true);
   const [showConfig, setShowConfig] = useState(false);
@@ -113,49 +78,67 @@ export default function PracticeModule({ onStartPractice, onImport, onHistory, e
     durationMinutes: 30,
   });
 
-  // 加载数据
+  const trackCategories = getTrackCategories(tracksConfig, examTrack);
+  const trackLabel = resolveTrackLabel(tracksConfig, examTrack);
+
+  // 加载数据：按当前类目的分类配置 + 该科目的题库统计
   useEffect(() => {
     const loadData = async () => {
-      if (examTrack !== 'gongkao') {
-        setModules([]);
-        setLoading(false);
-        return;
-      }
+      const categories = getTrackCategories(tracksConfig, examTrack);
+      setExpandedId(null);
+      setSubCategories({});
+
       if (!isElectron()) {
-        // 非 Electron 环境，显示所有默认分类
-        const defaultModules = Object.entries(categoryConfig).map(([id, cfg]) => ({
+        setModules(categories.map((id) => ({
           id,
-          name: cfg.name,
-          color: cfg.color,
+          name: getCategoryName(id),
+          color: getCategoryColor(id),
           count: 0,
-          done: 0
-        }));
-        setModules(defaultModules);
+          done: 0,
+        })));
         setLoading(false);
         return;
       }
 
       try {
-        // 获取分类统计
-        const categoryStats = await window.openexam.db.getCategoryStats();
-        const practiceStats = await window.openexam.db.getPracticeStats();
+        const categoryStats = await window.openexam.db.getCategoryStats({
+          subject: getTrackDefaultSubject(tracksConfig, examTrack),
+        });
 
-        // 合并默认分类和数据库统计，确保所有分类都显示
-        const moduleData = Object.entries(categoryConfig).map(([id, cfg]) => {
-          const dbStat = categoryStats.find(cat => cat.category === id);
+        const moduleData = categories.map((id) => {
+          const dbStat = categoryStats.find((cat) => cat.category === id);
           return {
             id,
-            name: cfg.name,
-            color: cfg.color,
+            name: getCategoryDisplay(tracksConfig, id).name,
+            color: getCategoryDisplay(tracksConfig, id).color,
             count: dbStat?.total || 0,
             done: dbStat?.done || 0,
+            answered: dbStat?.answered || 0,
+            correct: dbStat?.correct || 0,
+            accuracy: dbStat?.accuracy || 0,
             incomplete: dbStat?.incomplete || 0,
             rawTotal: dbStat?.rawTotal || dbStat?.total || 0,
           };
         });
 
+        // 数据库里有、类目配置没列出的分类也补进来，避免题目看不见
+        categoryStats.forEach((stat) => {
+          if (!stat.category || moduleData.some((mod) => mod.id === stat.category)) return;
+          moduleData.push({
+            id: stat.category,
+            name: getCategoryDisplay(tracksConfig, stat.category).name,
+            color: getCategoryDisplay(tracksConfig, stat.category).color,
+            count: stat.total || 0,
+            done: stat.done || 0,
+            answered: stat.answered || 0,
+            correct: stat.correct || 0,
+            accuracy: stat.accuracy || 0,
+            incomplete: stat.incomplete || 0,
+            rawTotal: stat.rawTotal || stat.total || 0,
+          });
+        });
+
         setModules(moduleData);
-        setStats(practiceStats);
       } catch (err) {
         console.error('加载数据失败:', err);
       }
@@ -229,13 +212,14 @@ export default function PracticeModule({ onStartPractice, onImport, onHistory, e
     return <div className="practice-page"><div className="loading-state">加载中...</div></div>;
   }
 
-  if (examTrack !== 'gongkao') {
+  if (trackCategories.length === 0) {
     return (
       <div className="practice-page">
         <div className="empty-state" style={{ gap: 12, maxWidth: 420, margin: '60px auto', textAlign: 'center' }}>
-          <p style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>当前类目（{TRACK_LABELS[examTrack] || examTrack}）暂无内置专项题库</p>
-          <span style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.7 }}>一键去 AI 出卷，生成后会出现在「模拟考试 / AI 出卷」里，可直接开练。</span>
+          <p style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>「{trackLabel}」暂无可练习的分类</p>
+          <span style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.7 }}>可以导入试卷，或让 AI 先出一套题。</span>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center', marginTop: 8 }}>
+            <button className="summary-btn" onClick={() => onAdaptivePractice?.()}>自适应练习</button>
             <button className="summary-btn" onClick={() => onGoAIGenerate?.()}>一键 AI 出卷</button>
             <button className="summary-btn outline" onClick={() => onImport?.()}>导入试卷</button>
             <button className="summary-btn outline" onClick={() => onHistory?.()}>练习历史</button>
@@ -247,6 +231,9 @@ export default function PracticeModule({ onStartPractice, onImport, onHistory, e
 
   const totalCount = modules.reduce((sum, m) => sum + m.count, 0);
   const totalDone = modules.reduce((sum, m) => sum + m.done, 0);
+  const answeredTotal = modules.reduce((sum, m) => sum + (m.answered || 0), 0);
+  const correctTotal = modules.reduce((sum, m) => sum + (m.correct || 0), 0);
+  const accuracy = answeredTotal > 0 ? Math.round((correctTotal / answeredTotal) * 100) : 0;
 
   return (
     <div className="practice-page">
@@ -268,10 +255,16 @@ export default function PracticeModule({ onStartPractice, onImport, onHistory, e
         </div>
         <div className="summary-divider" />
         <div className="summary-item">
-          <span className="summary-value">{stats.accuracy}%</span>
+          <span className="summary-value">{accuracy}%</span>
           <span className="summary-label">正确率</span>
         </div>
         <div className="summary-actions">
+          <button className="summary-btn" onClick={() => onAdaptivePractice?.()}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 2a10 10 0 0 1 10 10" /><path d="M12 6a6 6 0 0 1 6 6" /><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" /><path d="M12 22A10 10 0 0 1 2 12" /><path d="M12 18a6 6 0 0 1-6-6" />
+            </svg>
+            自适应练习
+          </button>
           <button className="summary-btn outline" onClick={openConfig}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
@@ -368,7 +361,7 @@ export default function PracticeModule({ onStartPractice, onImport, onHistory, e
                   <div className="practice-subs">
                     {subs.map(sub => (
                       <button key={sub.subCategory} className="sub-item" onClick={() => handleStartPractice(mod.id, sub.subCategory)} disabled={sub.count === 0}>
-                        <span className="sub-name">{subCategoryNames[sub.subCategory] || sub.subCategory || '未分类'}</span>
+                        <span className="sub-name">{getSubCategoryName(sub.subCategory) || '未分类'}</span>
                         <span className="sub-count">{sub.count} 题</span>
                         <Icons.arrow />
                       </button>

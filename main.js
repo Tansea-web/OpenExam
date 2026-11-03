@@ -1,6 +1,8 @@
 const { app, BrowserWindow, nativeTheme, ipcMain, nativeImage, protocol } = require("electron");
 const path = require("path");
 const database = require("./src/main/database.js");
+const trackConfig = require("./src/main/trackConfig.js");
+const backup = require("./src/main/backup.js");
 const paperExport = require("./src/main/paperExport.js");
 const updater = require("./src/main/updater.js");
 const questionAssets = require("./src/main/questionAssets.js");
@@ -76,6 +78,22 @@ app.whenReady().then(() => {
   // 初始化数据库
   database.initDatabase();
 
+  // 每日自动备份（失败不阻塞启动）
+  try {
+    const result = backup.runDailyBackup({
+      createBackup: (targetPath) => database.createBackupCopy(targetPath),
+      backupDir: backup.getBackupDir(app.getPath("userData")),
+      getSetting: (key) => database.getAppPreference(key)?.value ?? null,
+    });
+    if (result?.file) {
+      console.log(`[backup] 今日备份完成: ${result.file}`);
+    } else if (result?.skipped && result.reason !== "already-backed-up") {
+      console.log(`[backup] 今日备份跳过: ${result.reason}`);
+    }
+  } catch (error) {
+    console.error("[backup] 每日备份失败:", error.message);
+  }
+
   createWindow();
   updater.initUpdater();
 
@@ -104,14 +122,23 @@ ipcMain.handle("db:savePracticeRecord", (event, record) => {
   return true;
 });
 
-ipcMain.handle("db:getPracticeRecords", () => {
-  return database.getPracticeRecords();
+ipcMain.handle("db:getPracticeRecords", (event, options) => {
+  return database.getPracticeRecords(options || {});
 });
 
-ipcMain.handle("db:addWrongQuestion", (event, { questionId, paperId, userAnswer, correctAnswer }) => {
-  database.addWrongQuestion(questionId, paperId, userAnswer, correctAnswer);
+ipcMain.handle("db:addWrongQuestion", (event, { questionId, paperId, userAnswer, correctAnswer, subject, cause }) => {
+  database.addWrongQuestion(questionId, paperId, userAnswer, correctAnswer, subject, cause);
   return true;
 });
+
+/* ─── 学习目标配置（目标 → 科目 → 分类） ─── */
+ipcMain.handle("db:listTrackConfig", () => trackConfig.listTrackConfig());
+ipcMain.handle("db:saveTrack", (event, payload) => trackConfig.saveTrack(payload || {}));
+ipcMain.handle("db:deleteTrack", (event, key) => trackConfig.deleteTrack(key));
+ipcMain.handle("db:saveTrackSubject", (event, payload) => trackConfig.saveSubject(payload || {}));
+ipcMain.handle("db:deleteTrackSubject", (event, key) => trackConfig.deleteSubject(key));
+ipcMain.handle("db:saveTrackCategory", (event, payload) => trackConfig.saveCategory(payload || {}));
+ipcMain.handle("db:deleteTrackCategory", (event, { subjectKey, key } = {}) => trackConfig.deleteCategory(subjectKey, key));
 
 ipcMain.handle("db:getWrongQuestions", (event, options) => {
   return database.getWrongQuestions(options || {});
@@ -121,16 +148,28 @@ ipcMain.handle("db:reviewWrongQuestion", (event, input) => {
   return database.reviewWrongQuestion(input?.questionId, input?.outcome);
 });
 
-ipcMain.handle("db:getCategoryStats", () => {
-  return database.getCategoryStats();
+ipcMain.handle("db:setWrongQuestionCause", (event, { questionId, cause } = {}) => {
+  return database.setWrongQuestionCause(questionId, cause);
+});
+
+ipcMain.handle("db:getCategoryStats", (event, options) => {
+  return database.getCategoryStats(options || {});
+});
+
+ipcMain.handle("db:getSubjectStats", () => {
+  return database.getSubjectStats();
+});
+
+ipcMain.handle("db:getAdaptiveQuestions", (event, options) => {
+  return database.getAdaptiveQuestions(options || {});
 });
 
 ipcMain.handle("db:getSmartRecommend", (event, options) => {
   return database.getSmartRecommend(options || {});
 });
 
-ipcMain.handle("db:getSubCategoryStats", (event, category) => {
-  return database.getSubCategoryStats(category);
+ipcMain.handle("db:getSubCategoryStats", (event, category, options) => {
+  return database.getSubCategoryStats(category, options || {});
 });
 
 ipcMain.handle("db:getPracticeStats", () => {
@@ -161,8 +200,8 @@ ipcMain.handle("db:deleteSavedPaper", (event, { paperId }) => {
   return database.deleteSavedPaper(paperId);
 });
 
-ipcMain.handle("db:getQuestionsByCategory", (event, { category, subCategory, limit, shuffle }) => {
-  return database.getQuestionsByCategory(category, subCategory, limit, shuffle);
+ipcMain.handle("db:getQuestionsByCategory", (event, { category, subCategory, limit, shuffle, subject }) => {
+  return database.getQuestionsByCategory(category, subCategory, limit, shuffle, { subject });
 });
 
 ipcMain.handle("db:getCategoryMaterialStats", (event, category) => {
@@ -357,6 +396,11 @@ ipcMain.handle("essay:listAttempts", (event, options) => database.getEssayAttemp
 ipcMain.handle("essay:getAttempt", (event, id) => database.getEssayAttempt(id));
 ipcMain.handle("essay:deleteAttempt", (event, id) => database.deleteEssayAttempt(id));
 ipcMain.handle("essay:recommend", (event, options) => database.getEssayRecommendation(options || {}));
+ipcMain.handle("essay:saveDraft", (event, { promptId, content, wordCount } = {}) =>
+  database.saveEssayDraft(promptId, content, wordCount)
+);
+ipcMain.handle("essay:getDraft", (event, promptId) => database.getEssayDraft(promptId));
+ipcMain.handle("essay:deleteDraft", (event, promptId) => database.deleteEssayDraft(promptId));
 
 ipcMain.handle("app:getInfo", () => {
   return updater.getAppInfo();
@@ -404,15 +448,15 @@ function emitChatStreamEvent(sender, payload) {
 }
 
 ipcMain.handle("ai:testConnection", async (event, settings) => {
-  return aiService.testConnection(settings);
+  return aiService.testConnection(database.resolveAISecrets(settings));
 });
 
 ipcMain.handle("ai:recognizeQuestions", async (event, { settings, imageBase64, mimeType }) => {
-  return aiService.recognizeQuestions(settings, imageBase64, mimeType);
+  return aiService.recognizeQuestions(database.resolveAISecrets(settings), imageBase64, mimeType);
 });
 
 ipcMain.handle("ai:chat", async (event, { settings, messages }) => {
-  return aiService.chat(settings, messages);
+  return aiService.chat(database.resolveAISecrets(settings), messages);
 });
 
 ipcMain.handle("ai:chatStreamStart", async (event, { settings, messages, requestId }) => {
@@ -431,7 +475,7 @@ ipcMain.handle("ai:chatStreamStart", async (event, { settings, messages, request
 
   (async () => {
     try {
-      const result = await aiService.chatStream(settings, messages, {
+      const result = await aiService.chatStream(database.resolveAISecrets(settings), messages, {
         signal: abortController.signal,
         onDelta: (delta) => {
           emitChatStreamEvent(sender, { requestId: id, type: "delta", delta: String(delta || "") });
@@ -474,11 +518,11 @@ ipcMain.handle("ai:chatStreamCancel", async (event, requestId) => {
 });
 
 ipcMain.handle("ai:gradeEssay", async (event, { settings, payload }) => {
-  return aiService.gradeEssay(settings, payload || {});
+  return aiService.gradeEssay(database.resolveAISecrets(settings), payload || {});
 });
 
 ipcMain.handle("ai:recognizeEssay", async (event, { settings, imageBase64, mimeType }) => {
-  return aiService.recognizeEssay(settings, imageBase64, mimeType);
+  return aiService.recognizeEssay(database.resolveAISecrets(settings), imageBase64, mimeType);
 });
 
 ipcMain.handle("ai:generatePaper", async (event, { settings, config }) => {
@@ -497,7 +541,7 @@ ipcMain.handle("ai:generatePaper", async (event, { settings, config }) => {
     difficulty: config?.difficulty,
   });
 
-  const result = await aiService.generatePaper(settings, config);
+  const result = await aiService.generatePaper(database.resolveAISecrets(settings), config);
 
   console.info(`[IPC][Generate][${requestId}] done`, {
     elapsedMs: Date.now() - startedAt,

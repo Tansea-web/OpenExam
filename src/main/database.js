@@ -2,14 +2,17 @@ const Database = require('better-sqlite3');
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
-const { app } = require('electron');
+const { app, safeStorage } = require('electron');
 const { normalizeQuestionTaxonomy, isFakeQuestion } = require('../shared/questionCategory');
 const { hasUsableMaterial, isPracticeableQuestion, parseOptions } = require('../shared/questionQuality');
 const { patchQuestionDatabase } = require('../shared/questionQualityRepair');
 const achievementCatalog = require('../shared/achievementCatalog.json');
 const studyPlan = require('./studyPlan.js');
+const trackConfig = require('./trackConfig.js');
+const { takeWithGroups, pickAdaptiveQuestions } = require('./adaptivePicker.js');
 
 let db = null;
+let dbFilePath = null;
 
 const REVIEW_INTERVAL_DAYS = [0, 1, 2, 4, 7, 15, 30];
 const USER_GENERATED_PAPER_TYPES = ['imported', 'ai_exam', 'ai_practice'];
@@ -224,6 +227,69 @@ function ensurePracticeRecordsMetaColumn() {
   db.exec('ALTER TABLE practice_records ADD COLUMN meta TEXT');
 }
 
+/**
+ * 练习记录与错题本的科目列。
+ * 只做「加列 + 回填」，重复执行安全；回填后读写都走列过滤，不再依赖每次 JOIN。
+ */
+function ensureSubjectIsolationColumns() {
+  const addColumn = (table, column, definition) => {
+    const columns = db.pragma(`table_info(${table})`);
+    if (!Array.isArray(columns) || !columns.length) return;
+    if (columns.some((item) => item.name === column)) return;
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  };
+
+  addColumn('practice_records', 'subject', 'TEXT');
+  addColumn('wrong_questions', 'subject', 'TEXT');
+
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_practice_records_subject ON practice_records(subject);
+    CREATE INDEX IF NOT EXISTS idx_wrong_questions_subject ON wrong_questions(subject);
+  `);
+
+  db.prepare(`
+    UPDATE practice_records
+    SET subject = (
+      SELECT COALESCE(NULLIF(TRIM(p.subject), ''), 'xingce') FROM papers p WHERE p.id = practice_records.paper_id
+    )
+    WHERE subject IS NULL
+      AND paper_id IS NOT NULL
+      AND EXISTS (SELECT 1 FROM papers p WHERE p.id = practice_records.paper_id)
+  `).run();
+
+  db.prepare(`
+    UPDATE wrong_questions
+    SET subject = (
+      SELECT COALESCE(NULLIF(TRIM(p.subject), ''), 'xingce') FROM papers p WHERE p.id = wrong_questions.paper_id
+    )
+    WHERE subject IS NULL
+      AND paper_id IS NOT NULL
+      AND EXISTS (SELECT 1 FROM papers p WHERE p.id = wrong_questions.paper_id)
+  `).run();
+
+  // 专项练习的会话没有 paper_id，用分类推断所属科目兜底，避免历史记录在所有目标下重复出现
+  db.prepare(`
+    UPDATE practice_records
+    SET subject = CASE
+      WHEN category IN ('yanyu', 'shuliang', 'panduan', 'ziliao', 'changshi') THEN 'xingce'
+      WHEN category LIKE 'cs_%' THEN 'computer'
+      ELSE NULL END
+    WHERE subject IS NULL AND category IS NOT NULL AND TRIM(category) != ''
+  `).run();
+
+  db.prepare(`
+    UPDATE wrong_questions
+    SET subject = (
+      SELECT CASE
+        WHEN q.category IN ('yanyu', 'shuliang', 'panduan', 'ziliao', 'changshi') THEN 'xingce'
+        WHEN q.category LIKE 'cs_%' THEN 'computer'
+        ELSE NULL END
+      FROM questions q WHERE q.id = wrong_questions.question_id
+    )
+    WHERE subject IS NULL AND question_id IS NOT NULL
+  `).run();
+}
+
 function ensureWrongQuestionsSchema() {
   const columns = db.pragma('table_info(wrong_questions)');
   if (!Array.isArray(columns) || !columns.length) return;
@@ -234,6 +300,7 @@ function ensureWrongQuestionsSchema() {
     ['last_review', 'TEXT'],
     ['next_review_at', 'TEXT'],
     ['review_stage', 'INTEGER DEFAULT 0'],
+    ['cause', 'TEXT'],
   ];
 
   additions.forEach(([name, definition]) => {
@@ -286,6 +353,7 @@ function ensureQuestionsSchema() {
 function initDatabase() {
   const userDataPath = app.getPath('userData');
   const dbPath = path.join(userDataPath, 'openexam.db');
+  dbFilePath = dbPath;
 
   fs.mkdirSync(userDataPath, { recursive: true });
   bootstrapBundledDatabase(dbPath);
@@ -358,6 +426,7 @@ function initDatabase() {
       paper_id TEXT NOT NULL,
       user_answer TEXT,
       correct_answer TEXT,
+      cause TEXT,
       added_at TEXT DEFAULT CURRENT_TIMESTAMP,
       review_count INTEGER DEFAULT 0,
       last_review TEXT,
@@ -401,6 +470,16 @@ function initDatabase() {
   ensureWrongQuestionsSchema();
   ensureQuestionsSchema();
   normalizePaperProvinceData();
+
+  // 学习目标配置（目标 → 科目 → 分类），首次启动幂等写入内置三目标
+  try {
+    trackConfig.initTrackConfig(db);
+  } catch (error) {
+    console.error('学习目标配置初始化失败:', error);
+  }
+
+  // 练习记录 / 错题本按科目隔离所需的列与历史数据回填
+  ensureSubjectIsolationColumns();
 
   // 备考待办 / 笔记 / 申论 / 词语 数据层
   try {
@@ -516,19 +595,30 @@ function normalizePracticeMeta(meta) {
   return null;
 }
 
+function resolvePaperSubject(paperId, fallback = '') {
+  const id = String(paperId || '').trim();
+  if (!id) return String(fallback || '').trim();
+  const row = db.prepare(`
+    SELECT COALESCE(NULLIF(TRIM(subject), ''), 'xingce') AS subject FROM papers WHERE id = ?
+  `).get(id);
+  return String(row?.subject || fallback || '').trim();
+}
+
 function savePracticeRecord(record) {
   const meta = normalizePracticeMeta(record.meta);
+  const subject = resolvePaperSubject(record.paperId, record.subject);
   // 只在本次由「未完成」跨到「已完成」时回写待办，避免答题中途的自动保存重复计数
   const previous = db.prepare('SELECT status FROM practice_records WHERE id = ?').get(record.id);
   const justCompleted = record.status === 'completed' && previous?.status !== 'completed';
   const stmt = db.prepare(`
     INSERT OR REPLACE INTO practice_records
-    (id, paper_id, category, sub_category, start_time, end_time, duration, status, answers, correct_count, total_count, accuracy, score, meta)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    (id, paper_id, subject, category, sub_category, start_time, end_time, duration, status, answers, correct_count, total_count, accuracy, score, meta)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   stmt.run(
     record.id,
     record.paperId || null,
+    subject || null,
     record.category || null,
     record.subCategory || null,
     record.startTime,
@@ -557,14 +647,26 @@ function savePracticeRecord(record) {
   }
 }
 
-// 获取练习记录
-function getPracticeRecords() {
+// 获取练习记录；options.subject 用于按目标隔离，options.onlySubject 为 false 时返回全部
+function getPracticeRecords(options = {}) {
+  const subject = String(options?.subject || '').trim();
+  const onlySubject = options?.onlySubject !== false;
+  const params = [];
+  let where = '';
+
+  if (subject && onlySubject) {
+    where = 'WHERE pr.subject = ?';
+    params.push(subject);
+  }
+
   const rows = db.prepare(`
     SELECT pr.*, p.title as paper_title
     FROM practice_records pr
     LEFT JOIN papers p ON pr.paper_id = p.id
+    ${where}
     ORDER BY pr.start_time DESC
-  `).all();
+  `).all(...params);
+
   return rows.map(row => ({
     ...row,
     answers: row.answers ? JSON.parse(row.answers) : {},
@@ -585,23 +687,26 @@ function getQuestionsByIds(ids = []) {
   return list.map((id) => byId.get(id)).filter(Boolean);
 }
 
-// 添加错题
-function addWrongQuestion(questionId, paperId, userAnswer, correctAnswer) {
+// 添加错题；subject 从试卷反查，取不到时用调用方传入的值；cause 为错因（可后补）
+function addWrongQuestion(questionId, paperId, userAnswer, correctAnswer, subjectInput, cause) {
   const now = toSQLiteDateTime();
+  const subject = resolvePaperSubject(paperId, subjectInput) || null;
   db.prepare(`
     INSERT INTO wrong_questions (
-      id, question_id, paper_id, user_answer, correct_answer,
+      id, question_id, paper_id, subject, user_answer, correct_answer, cause,
       added_at, next_review_at, review_stage
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, 0)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
     ON CONFLICT(id) DO UPDATE SET
       paper_id = excluded.paper_id,
+      subject = COALESCE(excluded.subject, wrong_questions.subject),
+      cause = COALESCE(excluded.cause, wrong_questions.cause),
       user_answer = excluded.user_answer,
       correct_answer = excluded.correct_answer,
       added_at = excluded.added_at,
       next_review_at = excluded.next_review_at,
       review_stage = 0
-  `).run(`wrong_${questionId}`, questionId, String(paperId || ''), userAnswer, correctAnswer, now, now);
+  `).run(`wrong_${questionId}`, questionId, String(paperId || ''), subject, userAnswer, correctAnswer, cause || null, now, now);
 }
 
 function hydrateWrongQuestionRow(row) {
@@ -636,9 +741,21 @@ function getWrongQuestionById(id) {
 
 function getWrongQuestions(options = {}) {
   const dueOnly = Boolean(options && options.dueOnly);
+  const subject = String(options?.subject || '').trim();
+  const cause = String(options?.cause || '').trim();
   const limit = Number(options && options.limit);
   const params = [];
-  const where = dueOnly ? `WHERE COALESCE(wq.next_review_at, wq.added_at, datetime('now')) <= datetime('now')` : '';
+  const conditions = [];
+  if (dueOnly) conditions.push(`COALESCE(wq.next_review_at, wq.added_at, datetime('now')) <= datetime('now')`);
+  if (cause) {
+    conditions.push(`TRIM(COALESCE(wq.cause, '')) = ?`);
+    params.push(cause);
+  }
+  if (subject) {
+    conditions.push(`(p.subject = ? OR (? = 'xingce' AND (p.subject IS NULL OR TRIM(p.subject) = '')))`);
+    params.push(subject, subject);
+  }
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
   const limitSql = Number.isFinite(limit) && limit > 0 ? ' LIMIT ?' : '';
   if (limitSql) params.push(Math.floor(limit));
 
@@ -646,7 +763,7 @@ function getWrongQuestions(options = {}) {
     SELECT wq.*, q.content, q.content_html, q.options, q.analysis, q.analysis_html, q.category, q.sub_category, q.answer, p.title AS paper_title
     FROM wrong_questions wq
     LEFT JOIN questions q ON wq.question_id = q.id
-    LEFT JOIN papers p ON wq.paper_id = p.id
+    LEFT JOIN papers p ON p.id = COALESCE(NULLIF(wq.paper_id, ''), q.paper_id)
     ${where}
     ORDER BY
       CASE WHEN COALESCE(wq.next_review_at, wq.added_at, datetime('now')) <= datetime('now') THEN 0 ELSE 1 END ASC,
@@ -655,6 +772,24 @@ function getWrongQuestions(options = {}) {
       wq.added_at DESC
     ${limitSql}
   `).all(...params).map(hydrateWrongQuestionRow);
+}
+
+/** 标注/修改错因（知识缺口/审题偏差/计算失误/策略不当/时间失控 或自由文本） */
+function setWrongQuestionCause(questionId, cause) {
+  const id = `wrong_${String(questionId || '').trim()}`;
+  const row = db.prepare('SELECT id FROM wrong_questions WHERE id = ?').get(id);
+  if (!row) throw new Error('错题不存在');
+  const value = String(cause || '').trim() || null;
+  db.prepare('UPDATE wrong_questions SET cause = ? WHERE id = ?').run(value, id);
+  return hydrateWrongQuestionRow(
+    db.prepare(`
+      SELECT wq.*, q.content, q.content_html, q.options, q.analysis, q.analysis_html, q.category, q.sub_category, q.answer, p.title AS paper_title
+      FROM wrong_questions wq
+      LEFT JOIN questions q ON wq.question_id = q.id
+      LEFT JOIN papers p ON p.id = COALESCE(NULLIF(wq.paper_id, ''), q.paper_id)
+      WHERE wq.id = ?
+    `).get(id)
+  );
 }
 
 function reviewWrongQuestion(questionId, outcome = 'again') {
@@ -682,29 +817,40 @@ function reviewWrongQuestion(questionId, outcome = 'again') {
   return getWrongQuestionById(id);
 }
 
-// 获取分类统计
-function getCategoryStats() {
-  const stats = db.prepare(`
+// 获取分类统计。options.subject 用于只看某个类目的题库（如软考只看 computer）
+function getCategoryStats(options = {}) {
+  const subject = String(options?.subject || '').trim();
+  const subjectClause = subject ? 'AND p.subject = @subject' : '';
+  const runAll = (sql) => {
+    const stmt = db.prepare(sql);
+    return subject ? stmt.all({ subject }) : stmt.all();
+  };
+
+  const stats = runAll(`
     SELECT
-      category,
+      q.category,
       COUNT(*) as total,
       0 as done
-    FROM questions
-    WHERE category IS NOT NULL AND TRIM(category) != ''
-    GROUP BY category
-  `).all();
+    FROM questions q
+    INNER JOIN papers p ON p.id = q.paper_id
+    WHERE q.category IS NOT NULL AND TRIM(q.category) != ''
+      ${subjectClause}
+    GROUP BY q.category
+  `);
 
   // 获取已做题数（从练习记录中统计）
-  const doneStats = db.prepare(`
+  const doneStats = runAll(`
     SELECT
       q.category,
       COUNT(DISTINCT q.id) as done
     FROM practice_records pr
     JOIN json_each(pr.answers) answer_keys
     INNER JOIN questions q ON q.id = answer_keys.key
+    INNER JOIN papers p ON p.id = q.paper_id
     WHERE pr.status = 'completed'
+      ${subjectClause}
     GROUP BY q.category
-  `).all();
+  `);
 
   const doneMap = {};
   doneStats.forEach(d => { doneMap[d.category] = d.done; });
@@ -714,7 +860,13 @@ function getCategoryStats() {
   const completed = db.prepare(`
     SELECT answers FROM practice_records WHERE status = 'completed' AND answers IS NOT NULL
   `).all();
-  const questionRows = db.prepare('SELECT id, category, answer, type FROM questions').all();
+  const questionRows = runAll(`
+    SELECT q.id, q.category, q.answer, q.type
+    FROM questions q
+    INNER JOIN papers p ON p.id = q.paper_id
+    WHERE 1 = 1
+      ${subjectClause}
+  `);
   const questionById = new Map(questionRows.map((row) => [row.id, row]));
 
   const normalizeMulti = (value) => {
@@ -775,16 +927,24 @@ function getCategoryStats() {
 
 function getSmartRecommend(options = {}) {
   const limit = Math.min(8, Math.max(1, Number(options.limit) || 5));
+  const subject = String(options?.subject || '').trim();
   const categoryNames = {
     yanyu: '言语理解',
     shuliang: '数量关系',
     panduan: '判断推理',
     ziliao: '资料分析',
     changshi: '常识判断',
+    cs_base: '计算机基础',
+    cs_net: '计算机网络',
+    cs_security: '网络安全',
+    cs_os: '操作系统',
+    cs_db: '数据库',
+    cs_prog: '程序设计',
+    cs_office: '办公软件',
   };
   const items = [];
 
-  const dueWrong = getWrongQuestions({ dueOnly: true, limit: 30 });
+  const dueWrong = getWrongQuestions({ dueOnly: true, limit: 30, subject });
   if (dueWrong.length) {
     items.push({
       id: 'wrong_due',
@@ -797,7 +957,7 @@ function getSmartRecommend(options = {}) {
     });
   }
 
-  const categoryStats = getCategoryStats()
+  const categoryStats = getCategoryStats({ subject })
     .filter((row) => row.category)
     .sort((a, b) => {
       const aAcc = Number(a.accuracy || 0);
@@ -832,16 +992,96 @@ function getSmartRecommend(options = {}) {
 }
 
 // 获取子分类统计
-function getSubCategoryStats(category) {
-  return db.prepare(`
+function getSubCategoryStats(category, options = {}) {
+  const subject = String(options?.subject || '').trim();
+  const subjectClause = subject ? 'AND p.subject = @subject' : '';
+  const stmt = db.prepare(`
     SELECT
-      sub_category as subCategory,
+      q.sub_category as subCategory,
       COUNT(*) as count
-    FROM questions
-    WHERE category = ?
-    GROUP BY sub_category
-    ORDER BY count DESC, sub_category ASC
-  `).all(category);
+    FROM questions q
+    INNER JOIN papers p ON p.id = q.paper_id
+    WHERE q.category = @category
+      ${subjectClause}
+    GROUP BY q.sub_category
+    ORDER BY count DESC, q.sub_category ASC
+  `);
+  return subject ? stmt.all({ category, subject }) : stmt.all({ category });
+}
+
+/**
+ * 全科目学习情况：按 papers.subject 分组统计题量、已做、正确率。
+ * 用于「分析报告」里的跨科目总览，不随当前类目切换。
+ */
+function getSubjectStats() {
+  const rows = db.prepare(`
+    SELECT COALESCE(NULLIF(TRIM(p.subject), ''), 'xingce') AS subject,
+           COUNT(*) AS total
+    FROM questions q
+    INNER JOIN papers p ON p.id = q.paper_id
+    GROUP BY subject
+  `).all();
+
+  const questionRows = db.prepare(`
+    SELECT q.id, q.answer, q.type,
+           COALESCE(NULLIF(TRIM(p.subject), ''), 'xingce') AS subject
+    FROM questions q
+    INNER JOIN papers p ON p.id = q.paper_id
+  `).all();
+  const questionById = new Map(questionRows.map((row) => [row.id, row]));
+
+  const normalizeMulti = (value) => {
+    if (Array.isArray(value)) return [...new Set(value.map((v) => String(v || '').trim()).filter(Boolean))].sort().join(',');
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    if (/^[A-Z]+$/i.test(raw) && raw.length > 1) return [...new Set(raw.toUpperCase().split(''))].sort().join(',');
+    return [...new Set(raw.split(/[,，\s|/]+/).map((v) => v.trim()).filter(Boolean))].sort().join(',');
+  };
+
+  const buckets = new Map();
+  const touch = (subject) => {
+    if (!buckets.has(subject)) buckets.set(subject, { subject, answered: 0, correct: 0, doneIds: new Set() });
+    return buckets.get(subject);
+  };
+
+  const completed = db.prepare(`
+    SELECT answers FROM practice_records WHERE status = 'completed' AND answers IS NOT NULL
+  `).all();
+
+  completed.forEach((row) => {
+    let answers = {};
+    try { answers = row.answers ? JSON.parse(row.answers) : {}; } catch (error) { answers = {}; }
+    Object.entries(answers).forEach(([questionId, userRaw]) => {
+      const question = questionById.get(questionId);
+      if (!question) return;
+      const bucket = touch(question.subject);
+      bucket.answered += 1;
+      bucket.doneIds.add(questionId);
+      const userAnswer = question.type === 'multiple'
+        ? normalizeMulti(userRaw)
+        : String(userRaw?.userAnswer ?? userRaw?.answer ?? userRaw ?? '').trim();
+      const correctAnswer = question.type === 'multiple'
+        ? normalizeMulti(question.answer)
+        : String(question.answer || '').trim();
+      if (userAnswer && userAnswer === correctAnswer) bucket.correct += 1;
+    });
+  });
+
+  return rows
+    .map((row) => {
+      const bucket = buckets.get(row.subject);
+      const answered = bucket?.answered || 0;
+      const correct = bucket?.correct || 0;
+      return {
+        subject: row.subject,
+        total: row.total,
+        done: bucket ? bucket.doneIds.size : 0,
+        answered,
+        correct,
+        accuracy: answered > 0 ? Math.round((correct / answered) * 100) : 0,
+      };
+    })
+    .sort((a, b) => b.total - a.total);
 }
 
 function repairQuestionTaxonomy() {
@@ -1095,17 +1335,23 @@ function repairQuestionQuality() {
   return patchQuestionDatabase(db);
 }
 
-// 按分类获取题目（用于专项练习）
-function getQuestionsByCategory(category, subCategory, limit, shuffle) {
-  let sql = `SELECT * FROM questions WHERE category = ?`;
+// 按分类获取题目（用于专项练习）。options.subject 用于把取题范围限定在某个类目的题库
+function getQuestionsByCategory(category, subCategory, limit, shuffle, options = {}) {
+  const subject = String(options?.subject || '').trim();
+  let sql = `SELECT q.* FROM questions q INNER JOIN papers p ON p.id = q.paper_id WHERE q.category = ?`;
   const params = [category];
 
+  if (subject) {
+    sql += ` AND (p.subject = ? OR (? = 'xingce' AND (p.subject IS NULL OR TRIM(p.subject) = '')))`;
+    params.push(subject, subject);
+  }
+
   if (subCategory && subCategory !== 'all') {
-    sql += ` AND sub_category = ?`;
+    sql += ` AND q.sub_category = ?`;
     params.push(subCategory);
   }
 
-  sql += ` ORDER BY paper_id, order_num`;
+  sql += ` ORDER BY q.paper_id, q.order_num`;
 
   const rows = db.prepare(sql).all(...params)
     .map(mapQuestionRow)
@@ -1116,9 +1362,51 @@ function getQuestionsByCategory(category, subCategory, limit, shuffle) {
     result = [...rows].sort(() => Math.random() - 0.5);
   }
   if (limit && limit > 0) {
-    result = result.slice(0, limit);
+    // 组原子取样：共享材料组的题（如资料分析）整组纳入，不拆散
+    result = takeWithGroups(result, limit);
   }
   return result;
+}
+
+/** 自适应抽题：按科目全池取题 + 弱项加权 + 组原子取样 */
+function getAdaptiveQuestions(options = {}) {
+  const subject = String(options?.subject || '').trim();
+  const limit = Math.max(1, Math.min(100, Number(options?.limit) || 20));
+  if (!subject) throw new Error('缺少科目，无法自适应抽题');
+
+  const questions = db.prepare(`
+    SELECT q.*, p.title AS paper_title
+    FROM questions q
+    INNER JOIN papers p ON p.id = q.paper_id
+    WHERE (p.subject = ? OR (? = 'xingce' AND (p.subject IS NULL OR TRIM(p.subject) = '')))
+    ORDER BY q.category, q.paper_id, q.order_num
+  `).all(subject, subject)
+    .map(mapQuestionRow)
+    .filter((row) => row.practiceable);
+
+  const categoryStats = getCategoryStats({ subject });
+  const wrongRows = db.prepare(`
+    SELECT q.category, COUNT(*) AS count
+    FROM wrong_questions wq
+    INNER JOIN questions q ON q.id = wq.question_id
+    WHERE COALESCE(wq.review_stage, 0) < ? AND q.category IS NOT NULL AND TRIM(q.category) != ''
+    GROUP BY q.category
+  `).all(REVIEW_INTERVAL_DAYS.length);
+  const recentRows = db.prepare(`
+    SELECT category, COUNT(*) AS count
+    FROM (
+      SELECT category FROM practice_records
+      WHERE subject = ? AND status = 'completed' AND category IS NOT NULL AND TRIM(category) != ''
+      ORDER BY created_at DESC LIMIT 80
+    )
+    GROUP BY category
+  `).all(subject);
+
+  return pickAdaptiveQuestions(
+    questions,
+    { categoryStats, wrongRows, recentRows },
+    limit
+  );
 }
 
 function getCategoryMaterialStats(category = 'ziliao') {
@@ -1466,23 +1754,102 @@ function setAppPreference(key, value) {
   };
 }
 
+/* ─── AI 密钥安全存储 ───────────────────────────────────────────────
+ * 主进程是唯一真值：库内存 safeStorage(DPAPI) 加密值；
+ * getAISettings 对外只给占位符，明文只经 resolveAISecrets 注入 AI 调用。
+ */
+const AI_SECURE_MARKER = '__SECURED__';
+const AI_SECRET_FIELDS = ['apiKey', 'ocrApiKey'];
+
+function encryptSecret(value) {
+  const raw = String(value || '');
+  if (!raw) return '';
+  try {
+    if (!safeStorage || typeof safeStorage.isEncryptionAvailable !== 'function' || !safeStorage.isEncryptionAvailable()) {
+      console.warn('[ai-secrets] 系统不支持安全存储，API Key 将以明文保存');
+      return raw;
+    }
+    return `enc:${safeStorage.encryptString(raw).toString('base64')}`;
+  } catch (error) {
+    console.error('[ai-secrets] 加密失败，退回明文保存:', error.message);
+    return raw;
+  }
+}
+
+function decryptSecret(value) {
+  const raw = String(value || '');
+  if (!raw.startsWith('enc:')) return raw;
+  try {
+    return safeStorage.decryptString(Buffer.from(raw.slice(4), 'base64'));
+  } catch (error) {
+    console.error('[ai-secrets] 解密失败（密文可能来自其他机器），请重新填写 API Key');
+    return '';
+  }
+}
+
 function getAISettings() {
   const row = getAppSetting('ai_settings');
   if (!row?.value) return null;
   try {
-    return JSON.parse(row.value);
+    const parsed = JSON.parse(row.value);
+    if (parsed && typeof parsed === 'object') {
+      // 对外只暴露占位符，明文不离开主进程
+      AI_SECRET_FIELDS.forEach((field) => {
+        if (parsed[field]) parsed[field] = AI_SECURE_MARKER;
+      });
+    }
+    return parsed;
   } catch (error) {
     return null;
   }
 }
 
 function saveAISettings(settings) {
-  const payload = JSON.stringify(settings && typeof settings === 'object' ? settings : {});
+  const incoming = settings && typeof settings === 'object' ? { ...settings } : {};
+  // 占位符表示"沿用已保存的密钥"，避免设置页把占位符当新值写回
+  AI_SECRET_FIELDS.forEach((field) => {
+    if (Object.prototype.hasOwnProperty.call(incoming, field)) {
+      const value = String(incoming[field] ?? '');
+      incoming[field] = value === AI_SECURE_MARKER ? undefined : encryptSecret(value);
+      if (incoming[field] === undefined) delete incoming[field];
+    }
+  });
+
+  const existing = (() => {
+    const row = getAppSetting('ai_settings');
+    if (!row?.value) return {};
+    try { return JSON.parse(row.value) || {}; } catch (error) { return {}; }
+  })();
+
+  const merged = { ...existing, ...incoming };
+  const payload = JSON.stringify(merged);
   const row = setAppSetting('ai_settings', payload);
   return {
     success: true,
+    keySecured: Boolean(safeStorage?.isEncryptionAvailable?.()),
     updatedAt: row?.updated_at || new Date().toISOString(),
   };
+}
+
+/** main 进程 AI handler 专用：把 renderer 传来的占位密钥替换为真实密钥 */
+function resolveAISecrets(settings) {
+  if (!settings || typeof settings !== 'object') return settings;
+  const stored = (() => {
+    const row = getAppSetting('ai_settings');
+    if (!row?.value) return {};
+    try { return JSON.parse(row.value) || {}; } catch (error) { return {}; }
+  })();
+
+  const resolved = { ...settings };
+  AI_SECRET_FIELDS.forEach((field) => {
+    const current = String(resolved[field] ?? '');
+    if (!current || current === AI_SECURE_MARKER) {
+      resolved[field] = decryptSecret(stored[field] || '');
+    } else if (current.startsWith('enc:')) {
+      resolved[field] = decryptSecret(current);
+    }
+  });
+  return resolved;
 }
 
 function getAIConnectionState() {
@@ -1700,8 +2067,8 @@ function importAllData(payload = {}) {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const insertWrongQuestion = db.prepare(`
-    INSERT INTO wrong_questions (id, question_id, paper_id, user_answer, correct_answer, added_at, review_count, last_review, next_review_at, review_stage)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO wrong_questions (id, question_id, paper_id, subject, user_answer, correct_answer, cause, added_at, review_count, last_review, next_review_at, review_stage)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const insertAppSetting = db.prepare(`
     INSERT INTO app_settings (key, value, updated_at)
@@ -1803,8 +2170,10 @@ function importAllData(payload = {}) {
         id,
         questionId,
         paperId,
+        item.subject ? String(item.subject) : null,
         item.user_answer ? String(item.user_answer) : null,
         item.correct_answer ? String(item.correct_answer) : null,
+        item.cause ? String(item.cause) : null,
         String(item.added_at || toSQLiteDateTime()),
         Math.max(0, Number(item.review_count) || 0),
         item.last_review ? String(item.last_review) : null,
@@ -1964,8 +2333,20 @@ function closeDatabase() {
   }
 }
 
+/** 把当前数据库（含 WAL 检查点）拷贝到目标路径，供每日自动备份使用 */
+function createBackupCopy(targetPath) {
+  if (!db || !db.open) throw new Error('数据库未初始化');
+  if (!dbFilePath || !fs.existsSync(dbFilePath)) throw new Error('数据库文件不存在');
+  fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+  db.pragma('wal_checkpoint(FULL)');
+  fs.copyFileSync(dbFilePath, targetPath);
+  return targetPath;
+}
+
 module.exports = {
   initDatabase,
+  createBackupCopy,
+  resolveAISecrets,
   ...studyPlan,
   getPapers,
   getQuestionsByPaperId,
@@ -1973,9 +2354,12 @@ module.exports = {
   savePracticeRecord,
   getPracticeRecords,
   addWrongQuestion,
+  setWrongQuestionCause,
   getWrongQuestions,
   reviewWrongQuestion,
   getCategoryStats,
+  getSubjectStats,
+  getAdaptiveQuestions,
   getSmartRecommend,
   getSubCategoryStats,
   repairQuestionCategories,

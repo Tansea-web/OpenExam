@@ -172,7 +172,13 @@ export default function ExamRoom({ paperId, questions: propQuestions, config, re
     const firstPendingIndex = questions.findIndex(q => !answeredIndexes.has(q.id));
     setAnswers(restoredAnswers);
     setTimeElapsed(Math.max(0, Number(resumeRecord.duration || 0)));
-    if (firstPendingIndex >= 0) setCurrentIndex(firstPendingIndex);
+    // 优先用保存时的题位快照，保证「从哪退出就从哪继续」
+    const savedIndex = Number(resumeRecord?.meta?.currentIndex);
+    if (Number.isInteger(savedIndex) && savedIndex >= 0 && savedIndex < questions.length) {
+      setCurrentIndex(savedIndex);
+    } else if (firstPendingIndex >= 0) {
+      setCurrentIndex(firstPendingIndex);
+    }
     resumeAppliedRef.current = true;
   }, [questions, resumeRecord]);
 
@@ -186,7 +192,9 @@ export default function ExamRoom({ paperId, questions: propQuestions, config, re
     mode: config?.mode || 'practice',
     title: config?.title || paper?.title || '',
     questionIds: questions.map((q) => q.id),
-    questions: isWrongRedo ? questions : undefined,
+    // 题目快照始终随进度保存：题库变动后续做不会串题
+    questions,
+    currentIndex,
     durationMinutes: isMockMode ? durationMinutes : undefined,
   });
 
@@ -210,6 +218,7 @@ export default function ExamRoom({ paperId, questions: propQuestions, config, re
         wrongQuestions.push({
           questionId: q.id,
           paperId: q.paper_id || persistentPaperId,
+          subject: config?.subject || null,
           userAnswer: formatAnswerForDisplay(userAnswer, q.type),
           correctAnswer: formatAnswerForDisplay(q.answer, q.type),
         });
@@ -227,6 +236,7 @@ export default function ExamRoom({ paperId, questions: propQuestions, config, re
     await window.openexam.db.savePracticeRecord({
       id: sessionId,
       paperId: persistentPaperId,
+      subject: config?.subject || null,
       category: config?.category || null,
       subCategory: config?.subCategory || null,
       startTime: sessionStartTime,

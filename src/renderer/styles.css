@@ -241,6 +241,9 @@ button {
   padding: 50px 0 18px;
   border-right: 1px solid var(--line);
   position: relative;
+  /* 悬浮提示（::before）伸出侧栏绘制在右侧工作区之上，需要把侧栏整体提到更高层级，
+     否则会被 DOM 顺序在后的 workspace 内容遮住（tooltip 自身的 z-index 只在本上下文内生效） */
+  z-index: 60;
 }
 
 .rail-icon-text {
@@ -9968,7 +9971,7 @@ button {
 }
 
 /* 作答 */
-.essay-writer { display: flex; flex-direction: column; height: 100%; }
+.essay-writer { display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden; }
 .essay-writer-bar {
   display: flex; align-items: center; gap: 16px;
   padding: 14px 22px; border-bottom: 1px solid var(--line); background: var(--surface);
@@ -9982,9 +9985,17 @@ button {
   font-size: 13px; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums;
 }
 
-.essay-writer-body { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 0; min-height: 0; }
+.essay-writer-body {
+  flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 0;
+  min-height: 0; overflow: hidden;
+}
 
-.essay-material { padding: 22px; overflow-y: auto; border-right: 1px solid var(--line); }
+.essay-material {
+  padding: 22px; overflow-y: auto; border-right: 1px solid var(--line);
+  /* grid 子项默认 min-height:auto，材料一长就把行撑破，overflow 不生效，材料三会被裁掉 */
+  min-height: 0;
+  overscroll-behavior: contain;
+}
 .essay-material h3, .essay-requirement h3 {
   margin: 0 0 10px; font-size: 12px; font-weight: 600; color: var(--muted);
   letter-spacing: 0.04em;

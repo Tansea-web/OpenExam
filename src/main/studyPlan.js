@@ -188,6 +188,15 @@ function initStudyPlan(database) {
     );
     CREATE INDEX IF NOT EXISTS idx_essay_attempts_prompt ON essay_attempts(prompt_id);
     CREATE INDEX IF NOT EXISTS idx_essay_attempts_created ON essay_attempts(created_at DESC);
+
+    -- 申论草稿（每题一份，自动保存）
+    CREATE TABLE IF NOT EXISTS essay_drafts (
+      prompt_id TEXT PRIMARY KEY,
+      content TEXT NOT NULL DEFAULT '',
+      word_count INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
   `);
 
   initNotesSearch();
@@ -1032,6 +1041,42 @@ function deleteEssayAttempt(id) {
   return { success: true };
 }
 
+/* 申论草稿：每题一份，交卷或清空后删除 */
+function saveEssayDraft(promptId, content, wordCount) {
+  const key = String(promptId || '').trim();
+  if (!key) throw new Error('promptId 不能为空');
+  const safeContent = String(content || '');
+  db.prepare(`
+    INSERT INTO essay_drafts (prompt_id, content, word_count, updated_at)
+    VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(prompt_id) DO UPDATE SET
+      content = excluded.content,
+      word_count = excluded.word_count,
+      updated_at = CURRENT_TIMESTAMP
+  `).run(key, safeContent, Number(wordCount) || safeContent.replace(/\s/g, '').length);
+  return getEssayDraft(key);
+}
+
+function getEssayDraft(promptId) {
+  const key = String(promptId || '').trim();
+  if (!key) return null;
+  const row = db.prepare('SELECT * FROM essay_drafts WHERE prompt_id = ?').get(key);
+  if (!row) return null;
+  return {
+    promptId: row.prompt_id,
+    content: row.content || '',
+    wordCount: row.word_count || 0,
+    updatedAt: row.updated_at || null,
+  };
+}
+
+function deleteEssayDraft(promptId) {
+  const key = String(promptId || '').trim();
+  if (!key) return { success: false };
+  db.prepare('DELETE FROM essay_drafts WHERE prompt_id = ?').run(key);
+  return { success: true };
+}
+
 /** 今天该练哪道：优先没做过的，其次分最低的 */
 function getEssayRecommendation(options = {}) {
   const essayType = options.essayType || 'guina';
@@ -1081,6 +1126,9 @@ module.exports = {
   saveEssayPrompt,
   getEssayPrompts,
   getEssayPrompt,
+  saveEssayDraft,
+  getEssayDraft,
+  deleteEssayDraft,
   deleteEssayPrompt,
   saveEssayAttempt,
   getEssayAttempts,

@@ -1,5 +1,11 @@
 const OPENAI_FORMATS = ['responses', 'chat_completions'];
 
+/**
+ * 密钥占位符：主进程数据库里存的是 safeStorage(DPAPI) 加密值，
+ * renderer 拿到的只是这个占位符；保存时占位符表示「沿用已保存的密钥」。
+ */
+export const AI_SECURE_MARKER = '__SECURED__';
+
 export const AI_PROVIDERS = [
   { id: 'openai', name: 'OpenAI', icon: 'openai', sdkType: 'openai', baseUrl: 'https://api.openai.com/v1', models: ['gpt-5.4', 'gpt-5.4-mini', 'gpt-5.4-nano', 'gpt-5.3-chat-latest', 'gpt-5.2', 'gpt-5.2-mini', 'gpt-5', 'gpt-5-mini', 'gpt-5-codex', 'gpt-5.3-codex', 'gpt-5.2-codex', 'gpt-5.1-codex', 'gpt-5.1-codex-max', 'gpt-5.1-codex-mini', 'codex-mini-latest', 'gpt-4.1', 'gpt-4.1-mini', 'gpt-4o', 'gpt-4o-mini'], supportsVision: true, supportedFormats: OPENAI_FORMATS, defaultFormat: 'responses' },
   { id: 'minimax', name: 'MiniMax', icon: 'minimax', sdkType: 'openai', baseUrl: 'https://api.minimax.chat/v1', models: ['MiniMax-M1', 'MiniMax-Text-01', 'abab-6.5s-chat'], supportsVision: true, supportedFormats: ['chat_completions'], defaultFormat: 'chat_completions' },

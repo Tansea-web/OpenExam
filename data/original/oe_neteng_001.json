@@ -1,0 +1,404 @@
+{
+  "paper": {
+    "id": "paper_oe_neteng_001",
+    "title": "网络工程师（软考中级）原创题 001",
+    "year": 2026,
+    "type": "mock",
+    "subject": "computer",
+    "source": "original",
+    "note": "按软考中级《网络工程师》考试大纲自拟，覆盖 OSI、TCP/IP、子网划分、路由交换、网络安全等考点，不是历年真题原卷。导入时题目分类按 app 现有体系记为常识/科技。"
+  },
+  "questions": [
+    {
+      "id": "oe_neteng_001_q01",
+      "orderNum": 1,
+      "type": "single",
+      "category": "cs_net",
+      "subCategory": "cs_net",
+      "difficulty": 1,
+      "content": "在 OSI 参考模型中，负责为两台主机的应用进程之间提供端到端可靠传输的是（ ）。",
+      "options": [
+        { "key": "A", "content": "网络层" },
+        { "key": "B", "content": "传输层" },
+        { "key": "C", "content": "会话层" },
+        { "key": "D", "content": "数据链路层" }
+      ],
+      "answer": "B",
+      "analysis": "传输层为两端应用进程提供端到端的通信，TCP 在此层提供面向连接的可靠传输；网络层只负责主机到主机的分组转发，不保证可靠；数据链路层管相邻节点之间的帧传输。"
+    },
+    {
+      "id": "oe_neteng_001_q02",
+      "orderNum": 2,
+      "type": "single",
+      "category": "cs_net",
+      "subCategory": "cs_net",
+      "difficulty": 1,
+      "content": "TCP 建立连接的三次握手中，第二个报文段携带的标志位是（ ）。",
+      "options": [
+        { "key": "A", "content": "仅 SYN" },
+        { "key": "B", "content": "仅 ACK" },
+        { "key": "C", "content": "SYN 和 ACK" },
+        { "key": "D", "content": "FIN 和 ACK" }
+      ],
+      "answer": "C",
+      "analysis": "第一次客户端发 SYN，第二次服务器回 SYN+ACK（同时确认客户端序号并同步自己的序号），第三次客户端回 ACK。FIN 用于关闭连接。"
+    },
+    {
+      "id": "oe_neteng_001_q03",
+      "orderNum": 3,
+      "type": "single",
+      "category": "cs_net",
+      "subCategory": "cs_net",
+      "difficulty": 3,
+      "content": "某主机地址为 192.168.10.130/26，该地址所在子网的网络地址是（ ）。",
+      "options": [
+        { "key": "A", "content": "192.168.10.128" },
+        { "key": "B", "content": "192.168.10.64" },
+        { "key": "C", "content": "192.168.10.192" },
+        { "key": "D", "content": "192.168.10.0" }
+      ],
+      "answer": "A",
+      "analysis": "/26 的掩码是 255.255.255.192，块大小 64，子网边界为 0、64、128、192。130 落在 128～191 之间，故网络地址为 192.168.10.128，可用主机 126 个。"
+    },
+    {
+      "id": "oe_neteng_001_q04",
+      "orderNum": 4,
+      "type": "single",
+      "category": "cs_net",
+      "subCategory": "cs_net",
+      "difficulty": 2,
+      "content": "下列路由协议中，属于链路状态路由协议的是（ ）。",
+      "options": [
+        { "key": "A", "content": "RIP" },
+        { "key": "B", "content": "OSPF" },
+        { "key": "C", "content": "BGP" },
+        { "key": "D", "content": "RIPv2" }
+      ],
+      "answer": "B",
+      "analysis": "OSPF 采用链路状态算法，通过洪泛 LSA 建立链路状态数据库，再用 SPF（Dijkstra）计算最短路径；RIP、RIPv2 属于距离矢量协议；BGP 属于路径矢量协议。"
+    },
+    {
+      "id": "oe_neteng_001_q05",
+      "orderNum": 5,
+      "type": "single",
+      "category": "cs_net",
+      "subCategory": "cs_net",
+      "difficulty": 2,
+      "content": "BGP 建立邻居关系时使用的传输层端口号是（ ）。",
+      "options": [
+        { "key": "A", "content": "179" },
+        { "key": "B", "content": "21" },
+        { "key": "C", "content": "53" },
+        { "key": "D", "content": "520" }
+      ],
+      "answer": "A",
+      "analysis": "BGP 运行在 TCP 之上，使用 179 端口建立可靠的对等体连接。21 是 FTP 控制端口，53 是 DNS，520 是 RIP。"
+    },
+    {
+      "id": "oe_neteng_001_q06",
+      "orderNum": 6,
+      "type": "single",
+      "category": "cs_net",
+      "subCategory": "cs_net",
+      "difficulty": 2,
+      "content": "交换机上 Trunk 端口的主要作用是（ ）。",
+      "options": [
+        { "key": "A", "content": "只承载一个 VLAN 的流量" },
+        { "key": "B", "content": "直接连接用户终端设备" },
+        { "key": "C", "content": "对端口流量进行镜像复制" },
+        { "key": "D", "content": "承载多个 VLAN 的流量，通过 802.1Q 标签区分" }
+      ],
+      "answer": "D",
+      "analysis": "Trunk 端口用 802.1Q 在帧中插入 VLAN 标签，一条链路可同时传递多个 VLAN 的数据，通常用于交换机之间或交换机与路由器之间的级联。Access 端口才只属于一个 VLAN。"
+    },
+    {
+      "id": "oe_neteng_001_q07",
+      "orderNum": 7,
+      "type": "single",
+      "category": "cs_net",
+      "subCategory": "cs_net",
+      "difficulty": 2,
+      "content": "生成树协议（STP）的主要作用是（ ）。",
+      "options": [
+        { "key": "A", "content": "消除二层环路，避免广播风暴" },
+        { "key": "B", "content": "把多条链路捆绑以提高带宽" },
+        { "key": "C", "content": "在路由器之间计算最短路径" },
+        { "key": "D", "content": "对链路数据进行加密传输" }
+      ],
+      "answer": "A",
+      "analysis": "STP 通过选举根桥、确定根端口和指定端口，阻塞冗余端口，构造无环的树形拓扑，从而避免广播帧在环路中无限循环。链路捆绑是链路聚合的功能。"
+    },
+    {
+      "id": "oe_neteng_001_q08",
+      "orderNum": 8,
+      "type": "single",
+      "category": "cs_net",
+      "subCategory": "cs_net",
+      "difficulty": 2,
+      "content": "RIP 协议规定的最大跳数是（ ）。",
+      "options": [
+        { "key": "A", "content": "8" },
+        { "key": "B", "content": "16" },
+        { "key": "C", "content": "15" },
+        { "key": "D", "content": "255" }
+      ],
+      "answer": "C",
+      "analysis": "RIP 以跳数作为度量，最大有效跳数为 15，跳数为 16 时视为目的网络不可达。这也限制了 RIP 只能用于小型网络。"
+    },
+    {
+      "id": "oe_neteng_001_q09",
+      "orderNum": 9,
+      "type": "single",
+      "category": "cs_net",
+      "subCategory": "cs_net",
+      "difficulty": 3,
+      "content": "需要把 192.168.1.0/24 划分为至少 6 个子网，且每个子网至少能容纳 25 台主机，合适的是（ ）。",
+      "options": [
+        { "key": "A", "content": "255.255.255.192" },
+        { "key": "B", "content": "255.255.255.224" },
+        { "key": "C", "content": "255.255.255.240" },
+        { "key": "D", "content": "255.255.255.248" }
+      ],
+      "answer": "B",
+      "analysis": "/26（255.255.255.192）只能分 4 个子网，不满足 6 个；/27（255.255.255.224）分 8 个子网、每个 30 个可用地址，同时满足两个条件；/28 每个子网仅 14 个可用地址，不够 25 台。"
+    },
+    {
+      "id": "oe_neteng_001_q10",
+      "orderNum": 10,
+      "type": "single",
+      "category": "cs_net",
+      "subCategory": "cs_net",
+      "difficulty": 1,
+      "content": "ARP 协议的作用是（ ）。",
+      "options": [
+        { "key": "A", "content": "把 IP 地址解析为 MAC 地址" },
+        { "key": "B", "content": "把 MAC 地址解析为 IP 地址" },
+        { "key": "C", "content": "把域名解析为 IP 地址" },
+        { "key": "D", "content": "为终端动态分配 IP 地址" }
+      ],
+      "answer": "A",
+      "analysis": "ARP 在广播域内通过广播请求、单播应答，把目的 IP 地址解析为对应的 MAC 地址；反向的 MAC 到 IP 由 RARP 完成；域名解析是 DNS，动态分配地址是 DHCP。"
+    },
+    {
+      "id": "oe_neteng_001_q11",
+      "orderNum": 11,
+      "type": "single",
+      "category": "cs_net",
+      "subCategory": "cs_net",
+      "difficulty": 3,
+      "content": "关于 NAPT（网络地址端口转换），下列说法正确的是（ ）。",
+      "options": [
+        { "key": "A", "content": "只能实现公网与私网地址的一对一映射" },
+        { "key": "B", "content": "只转换 IP 首部中的目的地址" },
+        { "key": "C", "content": "多台内网主机可共用一个公网地址，用端口号区分会话" },
+        { "key": "D", "content": "转换过程中不修改传输层端口" }
+      ],
+      "answer": "C",
+      "analysis": "NAPT 在转换 IP 地址的同时改写传输层端口，利用端口号区分不同内网主机的会话，从而让多台主机共享一个公网地址。一对一映射是静态 NAT 的特点。"
+    },
+    {
+      "id": "oe_neteng_001_q12",
+      "orderNum": 12,
+      "type": "single",
+      "category": "cs_net",
+      "subCategory": "cs_net",
+      "difficulty": 3,
+      "content": "以太网规定最小帧长为 64 字节，其主要目的是（ ）。",
+      "options": [
+        { "key": "A", "content": "便于路由器进行分片" },
+        { "key": "B", "content": "提高信道的传输效率" },
+        { "key": "C", "content": "与 IPv6 的最小报文长度保持兼容" },
+        { "key": "D", "content": "保证发送方在帧发送完毕前能够检测到冲突" }
+      ],
+      "answer": "D",
+      "analysis": "CSMA/CD 要求发送站在发送最后一个比特时仍能检测到冲突。帧过短会出现发送已完成、冲突信号才到达的情况，导致无法正确重发，因此按最大冲突时延反推出 64 字节的下限。"
+    },
+    {
+      "id": "oe_neteng_001_q13",
+      "orderNum": 13,
+      "type": "single",
+      "category": "cs_net",
+      "subCategory": "cs_net",
+      "difficulty": 1,
+      "content": "IPv6 地址的长度是（ ）。",
+      "options": [
+        { "key": "A", "content": "32 位" },
+        { "key": "B", "content": "64 位" },
+        { "key": "C", "content": "128 位" },
+        { "key": "D", "content": "256 位" }
+      ],
+      "answer": "C",
+      "analysis": "IPv6 地址为 128 位，通常写成 8 组、每组 4 位十六进制数，用冒号分隔；IPv4 是 32 位。"
+    },
+    {
+      "id": "oe_neteng_001_q14",
+      "orderNum": 14,
+      "type": "single",
+      "category": "cs_net",
+      "subCategory": "cs_net",
+      "difficulty": 3,
+      "content": "地址 2001:0db8:0000:0000:0000:0000:0000:0001 的正确压缩形式是（ ）。",
+      "options": [
+        { "key": "A", "content": "2001:db8::1" },
+        { "key": "B", "content": "2001:db8:0::1" },
+        { "key": "C", "content": "2001:db8::0:1" },
+        { "key": "D", "content": "2001::db8::1" }
+      ],
+      "answer": "A",
+      "analysis": "IPv6 压缩规则有两条：每组前导 0 可省略；连续的全 0 组可用一对冒号代替，但一对冒号只能出现一次。故 2001:0db8:0000:0000:0000:0000:0000:0001 写作 2001:db8::1。"
+    },
+    {
+      "id": "oe_neteng_001_q15",
+      "orderNum": 15,
+      "type": "single",
+      "category": "cs_net",
+      "subCategory": "cs_net",
+      "difficulty": 2,
+      "content": "在 Windows 系统中，查看本机路由表的命令是（ ）。",
+      "options": [
+        { "key": "A", "content": "ipconfig /all" },
+        { "key": "B", "content": "route print" },
+        { "key": "C", "content": "netstat -an" },
+        { "key": "D", "content": "arp -a" }
+      ],
+      "answer": "B",
+      "analysis": "route print 显示本机 IPv4/IPv6 路由表；ipconfig /all 查看网卡配置；netstat -an 查看连接与监听端口；arp -a 查看 ARP 缓存。Linux 下对应命令是 route -n 或 ip route。"
+    },
+    {
+      "id": "oe_neteng_001_q16",
+      "orderNum": 16,
+      "type": "single",
+      "category": "cs_net",
+      "subCategory": "cs_net",
+      "difficulty": 1,
+      "content": "DNS 中用于把域名映射为 IPv4 地址的资源记录类型是（ ）。",
+      "options": [
+        { "key": "A", "content": "A" },
+        { "key": "B", "content": "AAAA" },
+        { "key": "C", "content": "PTR" },
+        { "key": "D", "content": "MX" }
+      ],
+      "answer": "A",
+      "analysis": "A 记录把域名映射为 IPv4 地址；AAAA 记录对应 IPv6；PTR 用于反向解析；MX 指定邮件服务器。"
+    },
+    {
+      "id": "oe_neteng_001_q17",
+      "orderNum": 17,
+      "type": "single",
+      "category": "cs_net",
+      "subCategory": "cs_net",
+      "difficulty": 2,
+      "content": "HTTP 响应状态码 301 表示（ ）。",
+      "options": [
+        { "key": "A", "content": "请求成功" },
+        { "key": "B", "content": "资源永久重定向" },
+        { "key": "C", "content": "请求的资源不存在" },
+        { "key": "D", "content": "服务器内部错误" }
+      ],
+      "answer": "B",
+      "analysis": "301 Moved Permanently 表示资源已永久移动到新位置；302 是临时重定向；200 表示成功；404 表示未找到；500 表示服务器内部错误。"
+    },
+    {
+      "id": "oe_neteng_001_q18",
+      "orderNum": 18,
+      "type": "single",
+      "category": "cs_net",
+      "subCategory": "cs_net",
+      "difficulty": 1,
+      "content": "下列设备中，主要工作在 OSI 数据链路层的是（ ）。",
+      "options": [
+        { "key": "A", "content": "二层交换机" },
+        { "key": "B", "content": "路由器" },
+        { "key": "C", "content": "集线器" },
+        { "key": "D", "content": "中继器" }
+      ],
+      "answer": "A",
+      "analysis": "二层交换机依据 MAC 地址表转发帧，工作在数据链路层；路由器工作在网络层；集线器和中继器只是信号放大与转发，工作在物理层。"
+    },
+    {
+      "id": "oe_neteng_001_q19",
+      "orderNum": 19,
+      "type": "single",
+      "category": "cs_net",
+      "subCategory": "cs_net",
+      "difficulty": 2,
+      "content": "与多模光纤相比，单模光纤的特点是（ ）。",
+      "options": [
+        { "key": "A", "content": "芯径大、成本低、传输距离短" },
+        { "key": "B", "content": "芯径小、传输距离远、带宽高" },
+        { "key": "C", "content": "只能传输可见光" },
+        { "key": "D", "content": "抗电磁干扰能力差" }
+      ],
+      "answer": "B",
+      "analysis": "单模光纤芯径约 9μm，只传输一种模式，采用 1310nm 或 1550nm 的激光光源，色散小，适合长距离、大容量传输；多模光纤芯径大（50/62.5μm），成本低但传输距离受限。"
+    },
+    {
+      "id": "oe_neteng_001_q20",
+      "orderNum": 20,
+      "type": "single",
+      "category": "cs_net",
+      "subCategory": "cs_net",
+      "difficulty": 2,
+      "content": "防火墙的 DMZ 区通常用于部署（ ）。",
+      "options": [
+        { "key": "A", "content": "内部办公终端" },
+        { "key": "B", "content": "核心数据库服务器" },
+        { "key": "C", "content": "对外提供服务的服务器" },
+        { "key": "D", "content": "网络管理终端" }
+      ],
+      "answer": "C",
+      "analysis": "DMZ（隔离区）位于内网与外网之间，用来放置 Web、邮件、DNS 等需要对外提供服务的服务器。这样即使服务器被攻破，攻击者也难以直接进入内网。"
+    },
+    {
+      "id": "oe_neteng_001_q21",
+      "orderNum": 21,
+      "type": "single",
+      "category": "cs_net",
+      "subCategory": "cs_net",
+      "difficulty": 2,
+      "content": "802.11 无线局域网采用的介质访问控制方式是（ ）。",
+      "options": [
+        { "key": "A", "content": "CSMA/CD" },
+        { "key": "B", "content": "令牌传递" },
+        { "key": "C", "content": "CSMA/CA" },
+        { "key": "D", "content": "时隙 ALOHA" }
+      ],
+      "answer": "C",
+      "analysis": "无线信道难以像有线那样检测冲突，802.11 采用载波侦听多路访问/冲突避免（CSMA/CA），通过随机退避和确认机制减少冲突；CSMA/CD 用于有线以太网。"
+    },
+    {
+      "id": "oe_neteng_001_q22",
+      "orderNum": 22,
+      "type": "single",
+      "category": "cs_net",
+      "subCategory": "cs_net",
+      "difficulty": 2,
+      "content": "SNMP 中被管理设备上的代理（Agent）默认监听的是（ ）。",
+      "options": [
+        { "key": "A", "content": "TCP 162 端口" },
+        { "key": "B", "content": "UDP 161 端口" },
+        { "key": "C", "content": "UDP 514 端口" },
+        { "key": "D", "content": "TCP 69 端口" }
+      ],
+      "answer": "B",
+      "analysis": "SNMP 管理站通过 UDP 161 端口向代理发送请求，代理用 162 端口主动发送 Trap 通知。514 是 syslog，69 是 TFTP。"
+    },
+    {
+      "id": "oe_neteng_001_q23",
+      "orderNum": 23,
+      "type": "single",
+      "category": "cs_net",
+      "subCategory": "cs_net",
+      "difficulty": 2,
+      "content": "下列地址中，属于 RFC1918 规定的私有地址的是（ ）。",
+      "options": [
+        { "key": "A", "content": "8.8.8.8" },
+        { "key": "B", "content": "100.64.0.1" },
+        { "key": "C", "content": "172.15.0.1" },
+        { "key": "D", "content": "172.16.0.1" }
+      ],
+      "answer": "D",
+      "analysis": "私有地址段为 10.0.0.0/8、172.16.0.0/12（即 172.16.0.0～172.31.255.255）、192.168.0.0/16。172.15.0.1 不在其中；100.64.0.0/10 是运营商级 NAT 的共享地址段；8.8.8.8 是公网 DNS。"
+    }
+  ]
+}

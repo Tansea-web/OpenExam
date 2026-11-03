@@ -18,6 +18,9 @@ Thumbs.db
 *.log
 npm-debug.log*
 
+# CodeBuddy local session data
+.codebuddy/
+
 # Environment
 .env
 .env.local

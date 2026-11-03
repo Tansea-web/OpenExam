@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDialog } from "../components/DialogProvider.jsx";
 import { NoteEditor } from "./Notes.jsx";
+import { localGradeEssay } from "../utils/essayLocalGrade.js";
 
 const ESSAY_TYPES = [
   { value: "guina", label: "归纳概括" },
@@ -336,11 +337,46 @@ function EssayWriter({ prompt, onExit, onGraded }) {
   const [answer, setAnswer] = useState("");
   const [seconds, setSeconds] = useState(0);
   const [grading, setGrading] = useState(false);
+  const [draftState, setDraftState] = useState("idle"); // idle | saving | saved | error
+
+  // 恢复上次草稿
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const draft = await window.openexam.essay.getDraft(prompt.id);
+        if (!cancelled && draft?.content) setAnswer(draft.content);
+      } catch (error) {
+        console.error("恢复申论草稿失败:", error);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [prompt.id]);
 
   useEffect(() => {
     const timer = setInterval(() => setSeconds((s) => s + 1), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // 草稿自动保存：输入停顿 1.2 秒落库
+  useEffect(() => {
+    if (!answer) return undefined;
+    setDraftState("saving");
+    const timer = setTimeout(async () => {
+      try {
+        await window.openexam.essay.saveDraft({
+          promptId: prompt.id,
+          content: answer,
+          wordCount: answer.replace(/\s/g, "").length,
+        });
+        setDraftState("saved");
+      } catch (error) {
+        setDraftState("error");
+        console.error("申论草稿保存失败:", error);
+      }
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, [answer, prompt.id]);
 
   const wordCount = answer.replace(/\s/g, "").length;
   const overLimit = prompt.wordLimit && wordCount > prompt.wordLimit;
@@ -351,27 +387,37 @@ function EssayWriter({ prompt, onExit, onGraded }) {
       return;
     }
     const settings = await window.openexam.db.getAISettings();
-    if (!settings?.apiKey) {
-      dialog.alert({ title: "先配置 AI", message: "批改要用到 AI，请先到「系统设置 → AI」里填好 API Key。" });
-      return;
-    }
+    const hasAI = Boolean(settings?.apiKey && settings.aiProvider);
 
     setGrading(true);
     try {
-      const result = await window.openexam.ai.gradeEssay(settings, {
-        essayType: prompt.essayType,
-        material: prompt.material,
-        requirement: prompt.requirement,
-        wordLimit: prompt.wordLimit,
-        referenceAnswer: prompt.referenceAnswer,
-        scoringPoints: prompt.scoringPoints,
-        answer,
-      });
-      if (!result?.success) {
-        dialog.alert({ title: "批改失败", message: result?.error || "稍后重试" });
-        return;
+      let review;
+      if (!hasAI) {
+        // 未配置 AI：本地规则评分兜底，不阻塞练习
+        const result = localGradeEssay({
+          answer,
+          wordLimit: prompt.wordLimit,
+          scoringPoints: prompt.scoringPoints,
+          essayType: prompt.essayType,
+        });
+        review = result.review;
+      } else {
+        const result = await window.openexam.ai.gradeEssay(settings, {
+          essayType: prompt.essayType,
+          material: prompt.material,
+          requirement: prompt.requirement,
+          wordLimit: prompt.wordLimit,
+          referenceAnswer: prompt.referenceAnswer,
+          scoringPoints: prompt.scoringPoints,
+          answer,
+        });
+        if (!result?.success) {
+          dialog.alert({ title: "批改失败", message: result?.error || "稍后重试" });
+          return;
+        }
+        review = result.review || {};
       }
-      const review = result.review || {};
+
       const saved = await window.openexam.essay.saveAttempt({
         promptId: prompt.id,
         answer,
@@ -380,6 +426,7 @@ function EssayWriter({ prompt, onExit, onGraded }) {
         maxScore: review.maxScore,
         review,
       });
+      await window.openexam.essay.deleteDraft(prompt.id);
       onGraded(saved);
     } catch (error) {
       dialog.alert({ title: "批改失败", message: error?.message || "未知错误" });
@@ -390,7 +437,13 @@ function EssayWriter({ prompt, onExit, onGraded }) {
 
   const exit = async () => {
     if (wordCount > 0) {
-      const ok = await dialog.confirm({ title: "退出作答", message: "还没交卷，写的内容会丢掉。" });
+      const draftSafe = draftState === "saved" || draftState === "saving";
+      const ok = await dialog.confirm({
+        title: "退出作答",
+        message: draftSafe
+          ? "草稿已自动保存，下次进入会恢复。确定退出吗？"
+          : "还没交卷，写的内容会丢掉。",
+      });
       if (!ok) return;
     }
     onExit();
@@ -429,10 +482,17 @@ function EssayWriter({ prompt, onExit, onGraded }) {
           />
 
           <div className="essay-answer-foot">
-            <span className={`essay-wordcount${overLimit ? " is-over" : ""}`}>
-              {wordCount}
-              {prompt.wordLimit ? ` / ${prompt.wordLimit} 字` : " 字"}
-              {overLimit && " · 超了"}
+            <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span className={`essay-wordcount${overLimit ? " is-over" : ""}`}>
+                {wordCount}
+                {prompt.wordLimit ? ` / ${prompt.wordLimit} 字` : " 字"}
+                {overLimit && " · 超了"}
+              </span>
+              <span style={{ fontSize: 11, color: "var(--muted)" }}>
+                {draftState === "saving" && "草稿保存中…"}
+                {draftState === "saved" && "草稿已自动保存"}
+                {draftState === "error" && "草稿保存失败"}
+              </span>
             </span>
             <button type="button" className="essay-primary" disabled={grading} onClick={submit}>
               {grading ? "AI 批改中，约 20 秒…" : "交卷批改"}

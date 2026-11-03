@@ -620,11 +620,14 @@ async function chatStream(settings, messages, options = {}) {
 const CATEGORY_NAMES = {
   yanyu: '言语理解与表达', shuliang: '数量关系', panduan: '判断推理',
   ziliao: '资料分析', changshi: '常识判断',
+  cs_base: '计算机基础', cs_net: '计算机网络', cs_security: '网络安全',
+  cs_os: '操作系统', cs_db: '数据库', cs_prog: '程序设计', cs_office: '办公软件',
 };
 
 const EXAM_TRACK_NAMES = {
   gongkao: '考公',
   shiye: '事业单位',
+  ruankao: '软考',
   kaoyan: '考研',
   self: '自定义备考',
 };

@@ -1,4 +1,6 @@
 import React, { useMemo } from 'react';
+import katex from 'katex';
+import 'katex/dist/katex.min.css';
 
 const HTML_RE = /<[^>]+>/;
 const ALLOWED_TAGS = new Set(['p', 'div', 'span', 'strong', 'b', 'em', 'i', 'u', 'br', 'img', 'sup', 'sub', 'table', 'thead', 'tbody', 'tr', 'td', 'th', 'colgroup', 'col', 'ul', 'ol', 'li']);
@@ -29,6 +31,30 @@ function escapeHtml(value) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+function unescapeHtml(value) {
+  return String(value || '')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, '&');
+}
+
+/** 渲染 $...$ / $$...$$ 公式片段（题库来源：AI 出题或导入内容） */
+function renderLatexSegments(html) {
+  if (!html.includes('$')) return html;
+  const render = (tex, displayMode) => {
+    try {
+      return katex.renderToString(tex, { displayMode, throwOnError: false, output: 'html' });
+    } catch (error) {
+      return escapeHtml(tex);
+    }
+  };
+  return html
+    .replace(/\$\$([\s\S]+?)\$\$/g, (_, tex) => render(unescapeHtml(tex), true))
+    .replace(/\$([^$\n<>]{1,300}?)\$/g, (_, tex) => render(unescapeHtml(tex), false));
 }
 
 function normalizeUrl(value) {
@@ -178,7 +204,7 @@ export function mathMlToPlainText(value = '') {
 }
 
 export default function RichQuestionContent({ value = '', className = '', style = undefined }) {
-  const html = useMemo(() => sanitizeHtml(value), [value]);
+  const html = useMemo(() => renderLatexSegments(sanitizeHtml(value)), [value]);
   if (!html) return null;
   return <div className={`rich-question-content ${className}`.trim()} style={style} dangerouslySetInnerHTML={{ __html: html }} />;
 }

@@ -2,26 +2,36 @@ import React, { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { getAISettings, isAIConfigured, isOCRConfigured } from '../store/aiSettings.js';
 import { useDialog } from '../components/DialogProvider.jsx';
+import { normalizeExamTrack } from '../../shared/examTracks.js';
+import {
+  getCategoryDisplay,
+  getTrackCategories,
+  getTrackDefaultSubject,
+} from '../../shared/trackConfig.js';
+import { CATEGORY_META } from '../../shared/categoryMeta.js';
 
-const categoryConfig = {
-  yanyu: { name: '言语理解', color: 'var(--category-yanyu)' },
-  shuliang: { name: '数量关系', color: 'var(--category-shuliang)' },
-  panduan: { name: '判断推理', color: 'var(--category-panduan)' },
-  ziliao: { name: '资料分析', color: 'var(--category-ziliao)' },
-  changshi: { name: '常识判断', color: 'var(--category-changshi)' },
-};
+// 中文分类名 / 分类 key → 分类 key，供 CSV/JSON 里的中文分类兜底
+const categoryNameToKey = Object.fromEntries(
+  Object.entries(CATEGORY_META).flatMap(([key, meta]) => [[meta.name, key], [key, key]])
+);
 
-// 子分类配置
+// 子分类配置（Excel 模板下拉用）
 const subCategoryConfig = {
   yanyu: ['选词填空', '片段阅读', '语句表达', '文章阅读'],
   shuliang: ['数学运算', '数字推理'],
   panduan: ['图形推理', '定义判断', '类比推理', '逻辑判断'],
   ziliao: ['文字资料', '表格资料', '图形资料', '综合资料'],
   changshi: ['政治', '经济', '法律', '科技', '人文', '地理'],
+  cs_net: ['计算机网络'],
+  cs_base: ['计算机基础'],
+  cs_security: ['网络安全'],
+  cs_os: ['操作系统'],
+  cs_db: ['数据库'],
+  cs_prog: ['程序设计'],
 };
 
 // 所有子分类合并
-const allSubCategories = Object.values(subCategoryConfig).flat();
+const allSubCategories = [...new Set(Object.values(subCategoryConfig).flat())];
 
 // 下载 Excel 模板（带下拉验证）
 function downloadTemplate() {
@@ -63,16 +73,21 @@ function downloadTemplate() {
   XLSX.writeFile(wb, '题目导入模板.xlsx');
 }
 
-export default function ImportPaper({ onBack, onImportComplete }) {
+export default function ImportPaper({ onBack, onImportComplete, examTrack = 'gongkao', tracksConfig }) {
   const [step, setStep] = useState(0); // 0: 选择方式, 1: 选择文件, 2: 配置选项, 3: 预览确认, 4: 解析结果
   const [importMode, setImportMode] = useState(null); // 'ai' | 'template'
   const [file, setFile] = useState(null);
   const [dragOver, setDragOver] = useState(false);
-  const [config, setConfig] = useState({
-    category: 'yanyu',
-    paperTitle: '',
-    year: new Date().getFullYear(),
+  const [config, setConfig] = useState(() => {
+    const track = normalizeExamTrack(examTrack);
+    return {
+      track,
+      category: getTrackCategories(tracksConfig, track)[0] || 'yanyu',
+      paperTitle: '',
+      year: new Date().getFullYear(),
+    };
   });
+  const trackCategories = getTrackCategories(tracksConfig, config.track);
   const [parsedQuestions, setParsedQuestions] = useState([]);
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState(null);
@@ -197,15 +212,6 @@ export default function ImportPaper({ onBack, onImportComplete }) {
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-  };
-
-  // 分类名称映射
-  const categoryNameToKey = {
-    '言语理解': 'yanyu',
-    '数量关系': 'shuliang',
-    '判断推理': 'panduan',
-    '资料分析': 'ziliao',
-    '常识判断': 'changshi',
   };
 
   const normalizeJsonQuestion = (rawQuestion) => {
@@ -406,7 +412,11 @@ export default function ImportPaper({ onBack, onImportComplete }) {
       // 保存到数据库
       if (window.openexam?.db) {
         const result = await window.openexam.db.importPaper(
-          { title: config.paperTitle, year: config.year },
+          {
+            title: config.paperTitle,
+            year: config.year,
+            subject: getTrackDefaultSubject(tracksConfig, config.track),
+          },
           parsedQuestions
         );
         await showAlert({ title: '导入成功', message: `共导入 ${result.questionCount} 道题目`, tone: 'success' });
@@ -588,16 +598,43 @@ export default function ImportPaper({ onBack, onImportComplete }) {
               </div>
 
               <div className="form-group">
+                <label>导入到目标</label>
+                <select
+                  value={config.track}
+                  onChange={(e) => {
+                    const nextTrack = normalizeExamTrack(e.target.value);
+                    setConfig((prev) => ({
+                      ...prev,
+                      track: nextTrack,
+                      category: getTrackCategories(tracksConfig, nextTrack)[0] || prev.category,
+                    }));
+                  }}
+                  style={{
+                    padding: '9px 10px',
+                    borderRadius: 8,
+                    border: '1px solid var(--line)',
+                    background: 'var(--surface)',
+                    color: 'var(--text)',
+                    fontSize: 13,
+                  }}
+                >
+                  {(tracksConfig?.tracks || []).map((track) => (
+                    <option key={track.key} value={track.key}>{track.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group">
                 <label>题目分类</label>
                 <div className="category-select">
-                  {Object.entries(categoryConfig).map(([key, val]) => (
+                  {trackCategories.map((key) => (
                     <button
                       key={key}
                       className={`category-option ${config.category === key ? 'selected' : ''}`}
-                      style={{ '--cat-color': val.color }}
+                      style={{ '--cat-color': getCategoryDisplay(tracksConfig, key).color }}
                       onClick={() => setConfig(prev => ({ ...prev, category: key }))}
                     >
-                      {val.name}
+                      {getCategoryDisplay(tracksConfig, key).name}
                     </button>
                   ))}
                 </div>
@@ -635,8 +672,14 @@ export default function ImportPaper({ onBack, onImportComplete }) {
                 <span className="preview-value">{config.paperTitle}</span>
               </div>
               <div className="preview-item">
+                <span className="preview-label">导入到目标</span>
+                <span className="preview-value">
+                  {tracksConfig?.tracks?.find((track) => track.key === config.track)?.label || config.track}
+                </span>
+              </div>
+              <div className="preview-item">
                 <span className="preview-label">题目分类</span>
-                <span className="preview-value">{categoryConfig[config.category]?.name}</span>
+                <span className="preview-value">{getCategoryDisplay(tracksConfig, config.category).name}</span>
               </div>
               <div className="preview-item">
                 <span className="preview-label">年份</span>

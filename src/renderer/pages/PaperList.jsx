@@ -3,6 +3,7 @@ import { actions } from '../store/examStore.js';
 import CustomSelect from '../components/CustomSelect.jsx';
 import { buildPaperShareText, copyText } from '../utils/paperShare.js';
 import { useDialog } from '../components/DialogProvider.jsx';
+import { matchPaperTrack, resolveTrackLabel } from '../../shared/trackConfig.js';
 
 // 省份标签数据
 const PROVINCES = [
@@ -65,25 +66,6 @@ function normalizePaperProvince(value) {
 }
 
 const PAGE_SIZE = 12;
-const TRACK_SUBJECTS = {
-  gongkao: 'xingce',
-  shiye: 'shiye',
-  kaoyan: 'kaoyan',
-  self: 'custom',
-};
-const TRACK_LABELS = {
-  gongkao: '考公',
-  shiye: '事业单位',
-  kaoyan: '考研',
-  self: '自定义',
-};
-
-function matchTrack(paper, track = 'gongkao') {
-  const expected = TRACK_SUBJECTS[track] || TRACK_SUBJECTS.gongkao;
-  const subject = String(paper?.subject || '').trim();
-  if (track === 'gongkao') return !subject || subject === expected;
-  return subject === expected;
-}
 
 function getPaperBadge(paper) {
   switch (paper?.type) {
@@ -117,7 +99,7 @@ function hasAnyAnswer(record) {
   });
 }
 
-export default function PaperList({ onOpenPaper, initialKeyword = '', focusToken = 0, examTrack = 'gongkao', onGoAIGenerate }) {
+export default function PaperList({ onOpenPaper, initialKeyword = '', focusToken = 0, examTrack = 'gongkao', tracksConfig, onGoAIGenerate, onImport }) {
   const [papers, setPapers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedProvince, setSelectedProvince] = useState('all');
@@ -161,9 +143,10 @@ export default function PaperList({ onOpenPaper, initialKeyword = '', focusToken
     keywordInputRef.current?.focus();
   }, [focusToken]);
 
+  const trackLabel = resolveTrackLabel(tracksConfig, examTrack);
   const trackPapers = useMemo(
-    () => papers.filter((paper) => matchTrack(paper, examTrack)),
-    [papers, examTrack]
+    () => papers.filter((paper) => matchPaperTrack(paper, tracksConfig, examTrack)),
+    [papers, tracksConfig, examTrack]
   );
   // 获取可用筛选项
   const years = useMemo(() => [...new Set(trackPapers.map(p => p.year))].sort((a, b) => b - a), [trackPapers]);
@@ -304,7 +287,10 @@ export default function PaperList({ onOpenPaper, initialKeyword = '', focusToken
               onChange={(nextValue) => setSelectedSubject(nextValue)}
               options={[
                 { value: 'all', label: '全部科目' },
-                ...subjects.map((subject) => ({ value: subject, label: subject })),
+                ...subjects.map((subject) => ({
+                  value: subject,
+                  label: tracksConfig?.subjects?.find((item) => item.key === subject)?.label || subject,
+                })),
               ]}
             />
           </div>
@@ -328,7 +314,7 @@ export default function PaperList({ onOpenPaper, initialKeyword = '', focusToken
           />
         </div>
         <div className="filter-right">
-          <span className="result-count" style={{ marginRight: 8 }}>类目：{TRACK_LABELS[examTrack] || examTrack}</span>
+          <span className="result-count" style={{ marginRight: 8 }}>类目：{trackLabel}</span>
           <span className="result-count">共 {filteredPapers.length} 套试卷</span>
         </div>
       </div>
@@ -392,25 +378,43 @@ export default function PaperList({ onOpenPaper, initialKeyword = '', focusToken
         <div className="empty-state">
           {trackPapers.length === 0 ? (
             <>
-              <p>当前类目（{TRACK_LABELS[examTrack] || examTrack}）暂无内置试卷</p>
-              <button
-                type="button"
-                onClick={() => onGoAIGenerate?.()}
-                style={{
-                  marginTop: 8,
-                  height: 32,
-                  borderRadius: 8,
-                  border: '1px solid var(--accent)',
-                  background: 'var(--accent-soft-bg)',
-                  color: 'var(--accent)',
-                  padding: '0 12px',
-                  cursor: 'pointer',
-                  fontSize: 12,
-                  fontWeight: 600,
-                }}
-              >
-                去 AI 出卷
-              </button>
+              <p>「{trackLabel}」还没有试卷</p>
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => onImport?.()}
+                  style={{
+                    height: 32,
+                    borderRadius: 8,
+                    border: '1px solid var(--accent)',
+                    background: 'var(--accent)',
+                    color: '#fff',
+                    padding: '0 12px',
+                    cursor: 'pointer',
+                    fontSize: 12,
+                    fontWeight: 600,
+                  }}
+                >
+                  导入试卷
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onGoAIGenerate?.()}
+                  style={{
+                    height: 32,
+                    borderRadius: 8,
+                    border: '1px solid var(--accent)',
+                    background: 'var(--accent-soft-bg)',
+                    color: 'var(--accent)',
+                    padding: '0 12px',
+                    cursor: 'pointer',
+                    fontSize: 12,
+                    fontWeight: 600,
+                  }}
+                >
+                  去 AI 出卷
+                </button>
+              </div>
             </>
           ) : (
             <p>暂无符合条件的试卷</p>

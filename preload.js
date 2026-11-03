@@ -13,13 +13,24 @@ contextBridge.exposeInMainWorld("openexam", {
     getQuestions: (paperId) => ipcRenderer.invoke("db:getQuestions", paperId),
     getQuestionsByIds: (ids) => ipcRenderer.invoke("db:getQuestionsByIds", ids),
     savePracticeRecord: (record) => ipcRenderer.invoke("db:savePracticeRecord", record),
-    getPracticeRecords: () => ipcRenderer.invoke("db:getPracticeRecords"),
+    getPracticeRecords: (options) => ipcRenderer.invoke("db:getPracticeRecords", options),
     addWrongQuestion: (data) => ipcRenderer.invoke("db:addWrongQuestion", data),
     getWrongQuestions: (options) => ipcRenderer.invoke("db:getWrongQuestions", options),
     reviewWrongQuestion: (input) => ipcRenderer.invoke("db:reviewWrongQuestion", input),
-    getCategoryStats: () => ipcRenderer.invoke("db:getCategoryStats"),
+    setWrongQuestionCause: (questionId, cause) =>
+      ipcRenderer.invoke("db:setWrongQuestionCause", { questionId, cause }),
+    getCategoryStats: (options) => ipcRenderer.invoke("db:getCategoryStats", options),
+    getSubjectStats: () => ipcRenderer.invoke("db:getSubjectStats"),
+    getAdaptiveQuestions: (options) => ipcRenderer.invoke("db:getAdaptiveQuestions", options),
+    listTrackConfig: () => ipcRenderer.invoke("db:listTrackConfig"),
+    saveTrack: (payload) => ipcRenderer.invoke("db:saveTrack", payload),
+    deleteTrack: (key) => ipcRenderer.invoke("db:deleteTrack", key),
+    saveTrackSubject: (payload) => ipcRenderer.invoke("db:saveTrackSubject", payload),
+    deleteTrackSubject: (key) => ipcRenderer.invoke("db:deleteTrackSubject", key),
+    saveTrackCategory: (payload) => ipcRenderer.invoke("db:saveTrackCategory", payload),
+    deleteTrackCategory: (subjectKey, key) => ipcRenderer.invoke("db:deleteTrackCategory", { subjectKey, key }),
     getSmartRecommend: (options) => ipcRenderer.invoke("db:getSmartRecommend", options),
-    getSubCategoryStats: (category) => ipcRenderer.invoke("db:getSubCategoryStats", category),
+    getSubCategoryStats: (category, options) => ipcRenderer.invoke("db:getSubCategoryStats", category, options),
     getPracticeStats: () => ipcRenderer.invoke("db:getPracticeStats"),
     importPaper: (paperData, questions) => ipcRenderer.invoke("db:importPaper", { paperData, questions }),
     saveAIPaper: (paperData, questions) => ipcRenderer.invoke("db:saveAIPaper", { paperData, questions }),
@@ -27,8 +38,8 @@ contextBridge.exposeInMainWorld("openexam", {
     getSavedAIPapers: () => ipcRenderer.invoke("db:getSavedAIPapers"),
     renameSavedPaper: (paperId, title) => ipcRenderer.invoke("db:renameSavedPaper", { paperId, title }),
     deleteSavedPaper: (paperId) => ipcRenderer.invoke("db:deleteSavedPaper", { paperId }),
-    getQuestionsByCategory: (category, subCategory, limit, shuffle) =>
-      ipcRenderer.invoke("db:getQuestionsByCategory", { category, subCategory, limit, shuffle }),
+    getQuestionsByCategory: (category, subCategory, limit, shuffle, options) =>
+      ipcRenderer.invoke("db:getQuestionsByCategory", { category, subCategory, limit, shuffle, subject: options?.subject }),
     getCategoryMaterialStats: (category) =>
       ipcRenderer.invoke("db:getCategoryMaterialStats", category || "ziliao"),
     getDailyStats: (days) => ipcRenderer.invoke("db:getDailyStats", days),
@@ -91,6 +102,9 @@ contextBridge.exposeInMainWorld("openexam", {
     getAttempt: (id) => ipcRenderer.invoke("essay:getAttempt", id),
     deleteAttempt: (id) => ipcRenderer.invoke("essay:deleteAttempt", id),
     recommend: (options) => ipcRenderer.invoke("essay:recommend", options),
+    saveDraft: (payload) => ipcRenderer.invoke("essay:saveDraft", payload),
+    getDraft: (promptId) => ipcRenderer.invoke("essay:getDraft", promptId),
+    deleteDraft: (promptId) => ipcRenderer.invoke("essay:deleteDraft", promptId),
   },
 
   app: {

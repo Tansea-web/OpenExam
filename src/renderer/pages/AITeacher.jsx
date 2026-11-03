@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { getAISettings, isAIConfigured } from "../store/aiSettings.js";
 import CustomSelect from "../components/CustomSelect.jsx";
 import { useDialog } from "../components/DialogProvider.jsx";
+import { CATEGORY_META } from "../../shared/categoryMeta.js";
 
 // ─── Icon ─────────────────────────────────────────────────────────────────────
 const Ico = ({ d, size = 14, col = "currentColor", sw = 1.8 }) => (
@@ -33,13 +34,9 @@ const QUICK_PROMPTS = [
 const DEFAULT_ASSISTANT_MESSAGE = "你好，我是 AI 学习助手「小开」。\n\n我可以帮你：\n- 讲解各类行测题目\n- 总结知识点与解题技巧\n- 生成同类变式练习题\n- 分析你的薄弱环节\n\n目前暂无正在分析的题目，请直接提问。";
 const AI_SESSION_KEY = "openexam_ai_active_session";
 const QUESTION_CONTEXT_KEY = "openexam_question_context";
-const CAT_LABELS = {
-  yanyu: "言语理解",
-  shuliang: "数量关系",
-  panduan: "判断推理",
-  ziliao: "资料分析",
-  changshi: "常识判断",
-};
+const CAT_LABELS = Object.fromEntries(
+  Object.entries(CATEGORY_META).map(([key, meta]) => [key, meta.name])
+);
 
 function normalizeMessages(rows) {
   const list = Array.isArray(rows) ? rows : [];

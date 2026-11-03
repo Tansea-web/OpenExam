@@ -4,6 +4,7 @@ const os = require('os');
 const path = require('path');
 const zlib = require('zlib');
 const { normalizeQuestionTaxonomy, isFakeQuestion } = require('../src/shared/questionCategory');
+const trackConfig = require('../src/main/trackConfig.js');
 
 const OFFICIAL_TYPES = ['national', 'provincial'];
 const DEFAULT_SEED_GZIP_PATH = path.join(__dirname, '../data/openexam.seed.db.gz');
@@ -110,6 +111,12 @@ function openDatabase(dbPath, options = {}) {
   db.pragma('journal_mode = WAL');
   createOfficialSchema(db);
   ensureQuestionColumns(db);
+  // 目标 / 科目 / 分类三张配置表随种子库一起分发，新装用户开箱即有内置三目标
+  try {
+    trackConfig.initTrackConfig(db);
+  } catch (error) {
+    console.error('种子库目标配置写入失败:', error.message);
+  }
   return db;
 }
 
@@ -187,7 +194,7 @@ function insertOfficialPapers(db, papers = [], options = {}) {
         paper.title,
         Number(paper.year) || new Date().getFullYear(),
         OFFICIAL_TYPES.includes(String(paper.type || '').trim()) ? paper.type : 'provincial',
-        'xingce',
+        String(paper.subject || '').trim() || 'xingce',
         normalizePaperProvince(paper.province),
         validQuestions.length,
         120,
@@ -295,7 +302,7 @@ function loadOfficialPapersFromDatabase(dbPath) {
   const db = new Database(dbPath, { readonly: true, fileMustExist: true });
   try {
     const papers = db.prepare(`
-      SELECT id, title, year, type, province, question_count, difficulty
+      SELECT id, title, year, type, subject, province, question_count, difficulty
       FROM papers
       WHERE type IN ('national', 'provincial')
       ORDER BY year DESC, created_at DESC, title ASC
@@ -327,6 +334,7 @@ function loadOfficialPapersFromDatabase(dbPath) {
         title: paper.title,
         year: paper.year,
         type: paper.type,
+        subject: paper.subject || 'xingce',
         province: normalizePaperProvince(paper.province),
         question_count: paper.question_count,
         difficulty: paper.difficulty,
