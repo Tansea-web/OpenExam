@@ -1,7 +1,7 @@
 const { app, BrowserWindow, shell } = require('electron');
 const { autoUpdater } = require('electron-updater');
 
-const RELEASES_URL = 'https://github.com/lmk1010/OpenExam/releases';
+const RELEASES_URL = 'https://github.com/Tansea-web/OpenExam/releases';
 const LATEST_RELEASE_API = 'https://api.github.com/repos/lmk1010/OpenExam/releases/latest';
 const AUTO_INSTALL_ENABLED = process.platform === 'win32';
 
@@ -12,8 +12,8 @@ const AUTO_INSTALL_ENABLED = process.platform === 'win32';
  */
 const UPDATE_SOURCES = [
   { name: 'github', type: 'default' },
-  { name: 'mirror-ghfast', type: 'generic', url: 'https://ghfast.top/https://github.com/lmk1010/OpenExam/releases/latest/download' },
-  { name: 'mirror-ghproxy', type: 'generic', url: 'https://mirror.ghproxy.com/https://github.com/lmk1010/OpenExam/releases/latest/download' },
+  { name: 'mirror-ghfast', type: 'generic', url: 'https://ghfast.top/https://github.com/Tansea-web/OpenExam/releases/latest/download' },
+  { name: 'mirror-ghproxy', type: 'generic', url: 'https://mirror.ghproxy.com/https://github.com/Tansea-web/OpenExam/releases/latest/download' },
 ];
 
 let initialized = false;
@@ -98,7 +98,7 @@ function applyFeed(source) {
     if (source.type === 'generic') {
       autoUpdater.setFeedURL({ provider: 'generic', url: source.url });
     } else {
-      autoUpdater.setFeedURL({ provider: 'github', owner: 'lmk1010', repo: 'OpenExam' });
+      autoUpdater.setFeedURL({ provider: 'github', owner: 'Tansea-web', repo: 'OpenExam' });
     }
     state.feedSource = source.name;
   } catch (error) {
