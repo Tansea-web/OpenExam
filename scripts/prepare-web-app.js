@@ -7,7 +7,6 @@ const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
 const OUT = path.join(ROOT, 'build', 'web-public');
-const SEED = path.join(ROOT, 'data', 'openexam.seed.db.gz');
 const PUBLIC_SRC = path.join(ROOT, 'src', 'web', 'public');
 const LOGO = path.join(ROOT, 'src', 'renderer', 'assets', 'openexam-logo.png');
 
@@ -22,16 +21,9 @@ function copyDirectory(from, to) {
 }
 
 fs.rmSync(OUT, { recursive: true, force: true });
-fs.mkdirSync(path.join(OUT, 'data'), { recursive: true });
-
 copyDirectory(PUBLIC_SRC, OUT);
 
-if (!fs.existsSync(SEED)) {
-  console.error(`[web] 缺少种子题库：${SEED}`);
-  process.exit(1);
-}
-fs.copyFileSync(SEED, path.join(OUT, 'data', 'openexam.seed.db.gz'));
-
+// 题库不再随包分发：首屏只初始化空库，题目由「导入题库包」按需载入
 if (fs.existsSync(LOGO)) {
   fs.copyFileSync(LOGO, path.join(OUT, 'icon-512.png'));
 }
@@ -48,5 +40,4 @@ for (const file of ['sql-wasm.js', 'sql-wasm.wasm']) {
   fs.copyFileSync(source, path.join(OUT, 'sql', file));
 }
 
-const size = (fs.statSync(path.join(OUT, 'data', 'openexam.seed.db.gz')).size / 1024 / 1024).toFixed(1);
-console.log(`[web] 静态资源已准备：build/web-public（种子 ${size}MB）`);
+console.log('[web] 静态资源已准备：build/web-public（不含题库，题目由用户导入）');

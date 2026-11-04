@@ -100,7 +100,9 @@ class Database {
     if (state.rawDb) {
       this.raw = state.rawDb;
     } else {
-      this.raw = new state.sqlJs.Database(state.dbBytes);
+      const bytes = state.dbBytes;
+      // 空库（首次启动）：让 sql.js 直接创建新的 SQLite 数据库
+      this.raw = bytes && bytes.length ? new state.sqlJs.Database(bytes) : new state.sqlJs.Database();
       state.rawDb = this.raw;
     }
   }

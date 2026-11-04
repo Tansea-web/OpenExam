@@ -3,9 +3,8 @@
  *
  * 组成：
  *   1. sql.js（WASM SQLite）承载 src/main/database.js 的同一套业务 SQL；
- *   2. 种子题库从 data/openexam.seed.db.gz 加载（只读）；
- *   3. 用户数据（练习记录、错题、笔记、待办…）以「表快照」形式存进 IndexedDB，
- *      写操作后防抖快照，冷启动时恢复；
+ *   2. 首屏只初始化空库（不内置题库），题目由用户通过「导入题库包」按需载入；
+ *   3. 数据与题库分开持久化到 IndexedDB：用户数据写后防抖快照，题库只在导入时存；
  *   4. AI / PDF / 更新等桌面能力在 PWA 中降级。
  */
 /**
@@ -31,11 +30,11 @@ async function loadSqlJs() {
   return window.initSqlJs({ locateFile: () => SQLJS_WASM_URL });
 }
 
-const SEED_URL = new URL('data/openexam.seed.db.gz', document.baseURI).href;
 const IDB_NAME = 'openexam-pwa';
 const IDB_STORE = 'kv';
-const SNAPSHOT_KEY = 'snapshot-v1';
-const SEED_TABLES = new Set(['papers', 'questions']);
+const USER_SNAPSHOT_KEY = 'snapshot-user-v2';
+const BANK_SNAPSHOT_KEY = 'snapshot-bank-v2';
+const BANK_TABLES = new Set(['papers', 'questions']);
 const SNAPSHOT_DELAY = 1200;
 
 /* ───────────────────────── IndexedDB ───────────────────────── */
@@ -75,12 +74,12 @@ async function idbSet(key, value) {
 
 /* ───────────────────────── 快照 ───────────────────────── */
 
-function captureSnapshot(raw) {
+function captureSnapshot(raw, bankOnly = false) {
   const result = raw.exec("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'");
   const names = result.length ? result[0].values.map((row) => row[0]) : [];
   const tables = {};
   for (const name of names) {
-    if (SEED_TABLES.has(name)) continue;
+    if (bankOnly ? !BANK_TABLES.has(name) : BANK_TABLES.has(name)) continue;
     const table = raw.exec(`SELECT * FROM "${name}"`);
     if (!table.length) {
       tables[name] = [];
@@ -118,33 +117,41 @@ function restoreSnapshot(raw, snapshot) {
   raw.exec('PRAGMA foreign_keys = ON');
 }
 
-/* ───────────────────────── 种子库 ───────────────────────── */
+/* ───────────────────────── 文件工具 ───────────────────────── */
 
-async function loadSeedBytes() {
-  let response;
-  try {
-    response = await fetch(SEED_URL, { cache: 'force-cache' });
-  } catch (error) {
-    throw new Error(`种子题库请求失败（${SEED_URL}）：${error?.message || error}`);
-  }
-  if (!response.ok) throw new Error(`种子题库加载失败（${response.status}）：${SEED_URL}`);
-  const payload = new Uint8Array(await response.arrayBuffer());
+function pickJsonFile() {
+  return new Promise((resolve) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json,application/json';
+    input.style.display = 'none';
+    document.body.appendChild(input);
+    let settled = false;
+    const done = (file) => {
+      if (settled) return;
+      settled = true;
+      input.remove();
+      resolve(file);
+    };
+    input.addEventListener('change', () => done(input.files?.[0] || null));
+    window.addEventListener('focus', () => setTimeout(() => done(null), 400), { once: true });
+    input.click();
+  });
+}
 
-  // 静态服务器可能已经按 Content-Encoding 解压过，这里按 gzip 魔数判断是否需要二次解压
-  const isGzip = payload.length > 2 && payload[0] === 0x1f && payload[1] === 0x8b;
-  if (!isGzip) return payload;
-
-  if (typeof DecompressionStream === 'undefined') {
-    throw new Error('当前浏览器不支持 DecompressionStream，请升级浏览器');
-  }
-  const stream = new Blob([payload]).stream().pipeThrough(new DecompressionStream('gzip'));
-  const buffer = await new Response(stream).arrayBuffer();
-  return new Uint8Array(buffer);
+function downloadJson(filename, data) {
+  const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 /* ───────────────────────── 桥接对象 ───────────────────────── */
 
-function createBridge(database, trackConfig, ctx) {
+function createBridge(database, trackConfig, questionPack, ctx) {
   const call = (name, ...args) => {
     const fn = database[name];
     if (typeof fn !== 'function') {
@@ -310,7 +317,45 @@ function createBridge(database, trackConfig, ctx) {
     app,
     ai,
     paper: { exportPdf: unsupported('导出 PDF') },
-    pack: { exportToFile: unsupported('导出题库包'), importFromFile: unsupported('导入题库包') },
+    pack: {
+      // 供拖放 / 自动化调用：直接吃题库包文本
+      async importFromText(text) {
+        let parsed;
+        try {
+          parsed = JSON.parse(text);
+        } catch (error) {
+          return { success: false, error: `文件不是合法 JSON：${error.message}` };
+        }
+        const checked = questionPack.validatePack(parsed);
+        if (!checked.valid) {
+          return { success: false, error: checked.errors.slice(0, 3).join('；'), errors: checked.errors };
+        }
+        const result = call('importQuestionPack', checked.pack);
+        await ctx.saveBank();
+        return { success: result.importedPapers > 0, ...result };
+      },
+      async importFromFile() {
+        const file = await pickJsonFile();
+        if (!file) return { success: false, canceled: true };
+        const result = await window.openexam.pack.importFromText(await file.text());
+        if (result.success) result.fileName = file.name;
+        return result;
+      },
+      async exportToFile(options = {}) {
+        const subject = String(options?.subject || '').trim();
+        const data = call('exportQuestionPack', { subject });
+        if (!data?.paperCount) return { success: false, error: '该范围下没有可导出的试卷' };
+        const pack = {
+          schemaVersion: questionPack.PACK_VERSION,
+          exportedAt: new Date().toISOString(),
+          app: { name: 'OpenExam', version: '0.3.0' },
+          scope: { subject, label: subject ? '单科目' : '全部题库' },
+          papers: data.papers,
+        };
+        downloadJson(`openexam-pack-${new Date().toISOString().slice(0, 10)}.json`, pack);
+        return { success: true, paperCount: data.paperCount, questionCount: data.questionCount };
+      },
+    },
   };
 }
 
@@ -319,17 +364,15 @@ function createBridge(database, trackConfig, ctx) {
 export async function initWebBridge() {
   if (typeof window === 'undefined' || window.openexam) return window.openexam;
 
-  console.info('[pwa] 加载 sql.js', SQLJS_URL);
   const SQL = await loadSqlJs();
-  console.info('[pwa] sql.js 就绪，开始读取种子题库');
-  const seedBytes = await loadSeedBytes();
-  console.info(`[pwa] 种子题库已解压：${(seedBytes.length / 1024 / 1024).toFixed(1)}MB`);
 
+  // 首屏只建空库：不再下载 10MB 种子，也不需要解压 50MB
+  const emptyDb = new Uint8Array(0);
   const ctx = {
     sqlJs: SQL,
-    dbBytes: seedBytes,
+    dbBytes: emptyDb,
     rawDb: null,
-    files: { '/userdata/openexam.db': seedBytes },
+    files: { '/userdata/openexam.db': emptyDb },
   };
   globalThis.__OPENEXAM_WEB__ = ctx;
 
@@ -339,11 +382,19 @@ export async function initWebBridge() {
     if (!ctx.rawDb || saving) return;
     saving = true;
     try {
-      await idbSet(SNAPSHOT_KEY, captureSnapshot(ctx.rawDb));
+      await idbSet(USER_SNAPSHOT_KEY, captureSnapshot(ctx.rawDb));
     } catch (error) {
-      console.warn('[pwa] 快照保存失败', error);
+      console.warn('[pwa] 学习数据快照保存失败', error);
     } finally {
       saving = false;
+    }
+  };
+  const saveBank = async () => {
+    if (!ctx.rawDb) return;
+    try {
+      await idbSet(BANK_SNAPSHOT_KEY, captureSnapshot(ctx.rawDb, true));
+    } catch (error) {
+      console.warn('[pwa] 题库快照保存失败', error);
     }
   };
   const scheduleSave = () => {
@@ -351,19 +402,26 @@ export async function initWebBridge() {
     saveTimer = setTimeout(() => { saveTimer = null; flush(); }, SNAPSHOT_DELAY);
   };
   ctx.markDirty = scheduleSave;
+  ctx.saveBank = saveBank;
 
   const module = await import('./generated/database.js');
-  const { database, trackConfig } = module.default || module;
+  const { database, trackConfig, questionPack } = module.default || module;
 
   database.initDatabase();
 
-  const snapshot = await idbGet(SNAPSHOT_KEY);
-  if (snapshot) {
-    restoreSnapshot(ctx.rawDb, snapshot);
-    console.info('[pwa] 已恢复本地学习数据', snapshot.savedAt);
+  const bankSnapshot = await idbGet(BANK_SNAPSHOT_KEY);
+  // 兼容旧版（内置种子题库）用户：保留他们已有的学习记录
+  const userSnapshot = (await idbGet(USER_SNAPSHOT_KEY)) || (await idbGet('snapshot-v1'));
+  if (bankSnapshot) {
+    restoreSnapshot(ctx.rawDb, bankSnapshot);
+    console.info('[pwa] 已恢复导入的题库', bankSnapshot.savedAt);
+  }
+  if (userSnapshot) {
+    restoreSnapshot(ctx.rawDb, userSnapshot);
+    console.info('[pwa] 已恢复本地学习数据', userSnapshot.savedAt);
   }
 
-  window.openexam = createBridge(database, trackConfig, ctx);
+  window.openexam = createBridge(database, trackConfig, questionPack, ctx);
   window.addEventListener('pagehide', () => { flush(); });
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') flush();

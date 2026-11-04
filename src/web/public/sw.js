@@ -7,7 +7,7 @@
  *   - 导航请求失败时回退 index.html，保证离线能启动。
  * 发版时改动 VERSION 即可让旧缓存整体失效。
  */
-const VERSION = 'v1';
+const VERSION = 'v2';
 const CACHE = `openexam-${VERSION}`;
 const PRECACHE = ['./', './index.html', './manifest.webmanifest'];
 

@@ -23,7 +23,7 @@ function renderApp() {
 async function bootstrap() {
   // 桌面端由 preload 注入 window.openexam；浏览器 / PWA 走 sql.js 桥接
   if (__OPENEXAM_WEB__ && !window.openexam) {
-    container.innerHTML = '<div style="display:grid;place-items:center;height:100vh;font:14px/1.6 system-ui;color:#6b7280">正在加载本地题库…</div>';
+    container.innerHTML = '<div style="display:grid;place-items:center;height:100vh;font:14px/1.6 system-ui;color:#6b7280">正在初始化本地数据…</div>';
     try {
       const { initWebBridge } = await import("../web/bridge.js");
       await initWebBridge();
