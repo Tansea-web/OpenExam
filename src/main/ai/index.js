@@ -8,6 +8,7 @@
 
 const OpenAI = require('openai');
 const Anthropic = require('@anthropic-ai/sdk');
+const { buildSystem, wrapUntrusted, wrapUntrustedList } = require('./prompts.js');
 
 const OPENAI_COMPATIBLE_PROVIDERS = {
   openai: {
@@ -418,7 +419,7 @@ function extractJSONObject(text) {
 
 async function structureQuestionsFromText(settings, rawText) {
   const { type, client, model, settings: normalizedSettings } = createClient(settings);
-  const prompt = `${OCR_PROMPT}\n\n以下是 OCR 提取出的原始文本，请你整理为标准 JSON：\n\n${rawText}`;
+  const prompt = `${OCR_PROMPT}\n\n以下是 OCR 提取出的原始文本，请你整理为标准 JSON：\n\n${wrapUntrusted('OCR 原始文本', rawText)}`;
 
   if (type === 'anthropic') {
     const response = await client.messages.create({
@@ -541,12 +542,12 @@ async function recognizeQuestions(settings, imageBase64, mimeType = 'image/png')
   }
 }
 
-const TEACHER_SYSTEM = `你是一位经验丰富、耐心细致的学习辅导老师，名叫"小开"。你的任务是：
+const TEACHER_SYSTEM = buildSystem(`你是一位经验丰富、耐心细致的学习辅导老师，名叫"小开"。你的任务是：
 1. 帮助学生理解题目、掌握知识点、提升学习能力
 2. 用通俗易懂的语言解释，必要时举例说明
 3. 鼓励学生思考，不直接给答案，引导式教学
 4. 回答时使用清晰的结构（分点、标题等）
-5. 如果学生问的不是学习相关问题，礼貌地引导回学习话题`;
+5. 如果学生问的不是学习相关问题，礼貌地引导回学习话题`);
 
 async function chat(settings, messages) {
   const { type, client, model, settings: normalizedSettings } = createClient(settings);
@@ -651,16 +652,22 @@ function getTargetCategories(config = {}) {
   return single ? [single] : ['changshi'];
 }
 
+/** 自定义名称来自用户输入，只保留单行短文本，去掉可能改变指令的符号 */
+function sanitizeCustomLabel(value, fallback) {
+  const text = String(value || '').replace(/\s+/g, ' ').replace(/[<>{}`]/g, '').trim().slice(0, 40);
+  return text || fallback;
+}
+
 function getTrackLabel(config = {}) {
   if (config?.track === 'self') {
-    return String(config?.customTrackName || '').trim() || EXAM_TRACK_NAMES.self;
+    return sanitizeCustomLabel(config?.customTrackName, EXAM_TRACK_NAMES.self);
   }
   return EXAM_TRACK_NAMES[config?.track] || EXAM_TRACK_NAMES.gongkao;
 }
 
 function getFocusLabel(config = {}) {
   if (config?.focus === 'custom') {
-    return String(config?.customFocusName || '').trim() || FOCUS_NAMES.custom;
+    return sanitizeCustomLabel(config?.customFocusName, FOCUS_NAMES.custom);
   }
   return FOCUS_NAMES[config?.focus] || FOCUS_NAMES.standard;
 }
@@ -1001,12 +1008,12 @@ async function testConnection(settings) {
    申论批改
    ================================================================== */
 
-const ESSAY_GRADER_SYSTEM = `你是一位阅卷经验丰富的公考申论阅卷老师。你的任务是按评分标准客观批改考生答案，不是鼓励，也不是教学。
+const ESSAY_GRADER_SYSTEM = buildSystem(`你是一位阅卷经验丰富的公考申论阅卷老师。你的任务是按评分标准客观批改考生答案，不是鼓励，也不是教学。
 批改必须做到：
 1. 逐条对照采分点，明确指出考生写到了哪些、漏了哪些
 2. 漏点要说清楚"材料里在哪、为什么该写、为什么考生会漏"
 3. 打分严格按要点覆盖为主，语言表述为辅，不放水
-4. 只输出 JSON，不要任何解释性文字、不要代码块标记`;
+4. 只输出 JSON，不要任何解释性文字、不要代码块标记`);
 
 const ESSAY_TYPE_LABEL = {
   guina: '归纳概括',
@@ -1031,23 +1038,26 @@ function buildEssayGradePrompt(payload = {}) {
   const limitText = wordLimit ? `${wordLimit} 字以内` : '未限制字数';
 
   const reference = referenceAnswer
-    ? `\n【参考答案】\n${referenceAnswer}\n`
+    ? `\n【参考答案】\n${wrapUntrusted('参考答案', referenceAnswer)}\n`
     : '';
   const points = Array.isArray(scoringPoints) && scoringPoints.length
-    ? `\n【已知采分点】\n${scoringPoints.map((p, i) => `${i + 1}. ${typeof p === 'string' ? p : p.text || ''}`).join('\n')}\n`
+    ? `\n【已知采分点】\n${wrapUntrustedList(
+      '采分点',
+      scoringPoints.map((p) => (typeof p === 'string' ? p : p.text || ''))
+    )}\n`
     : '\n【采分点】未提供，请你先从材料中自行提炼应得的采分点，再据此批改。\n';
 
   return `请批改下面这道申论「${typeLabel}」题。
 
 【给定材料】
-${material}
+${wrapUntrusted('给定材料', material)}
 
 【题目要求】
-${requirement}
+${wrapUntrusted('题目要求', requirement)}
 字数要求：${limitText}
 ${points}${reference}
 【考生答案】
-${answer}
+${wrapUntrusted('考生答案', answer)}
 
 按下面的 JSON 结构输出批改结果：
 {
@@ -1106,7 +1116,7 @@ async function gradeEssay(settings, payload) {
   }
 }
 
-const ESSAY_OCR_SYSTEM = `你是申论真题录入助手。从图片里原样提取给定材料和题目，不要改写、不要总结、不要补充。只输出 JSON。`;
+const ESSAY_OCR_SYSTEM = buildSystem(`你是申论真题录入助手。从图片里原样提取给定材料和题目，不要改写、不要总结、不要补充。只输出 JSON。`);
 
 /** 从图片里扒出申论题：材料 / 题干 / 要求 / 字数 */
 async function recognizeEssay(settings, imageBase64, mimeType = 'image/png') {
@@ -1166,10 +1176,197 @@ async function recognizeEssay(settings, imageBase64, mimeType = 'image/png') {
   }
 }
 
+/* ==================================================================
+   AI 变式训练（两段式：生成 → 终审）
+   ================================================================== */
+const VARIANT_CREATE_SYSTEM = buildSystem(`你是一位命题专家。任务是基于一道原题，另出一道「同一考点、不同问法」的单项选择题，用于巩固训练。
+硬性要求：
+1. 考点必须与原题一致，但情境、数据、表述都要换，不能只是改数字
+2. 四个选项只能有一个正确答案，其余三个必须是常见误区，不能出现两个都对的模糊项
+3. 选项内容简洁，单条不超过 40 字
+4. 必须给出 80 字以内的解析，说明为什么选它、其他选项错在哪
+5. 只输出 JSON，不要代码块标记`);
+
+const VARIANT_REVIEW_SYSTEM = buildSystem(`你是命题质量审核员。检查一道 AI 生成的变式题是否可用。
+检查项：
+1. 是否只有一个正确选项，answer 字段与选项完全对应
+2. 是否存在与正确答案等价、同样成立的选项
+3. 题干是否有歧义、缺少必要条件
+4. 选项是否重复或明显凑数
+只输出 JSON：{"pass":true或false,"issues":["问题描述"],"fixedAnswer":"若答案明显错误可给出修正选项字母，否则留空"}`);
+
+function buildVariantCreatePrompt(payload = {}) {
+  const { content = '', options = [], answer = '', analysis = '' } = payload;
+  const optionText = (Array.isArray(options) ? options : [])
+    .map((option) => `${option?.key || ''}. ${option?.content || ''}`)
+    .join('\n');
+  return `请基于下面这道原题，出一道同考点的变式题。
+
+【原题题干】
+${wrapUntrusted('原题题干', content)}
+
+【原题选项】
+${wrapUntrusted('原题选项', optionText)}
+
+【原题答案】
+${wrapUntrusted('原题答案', answer)}
+
+${analysis ? `【原题解析】\n${wrapUntrusted('原题解析', analysis)}\n` : ''}
+按下面的 JSON 输出：
+{
+  "content": "变式题题干",
+  "options": [{"key":"A","content":"..."},{"key":"B","content":"..."},{"key":"C","content":"..."},{"key":"D","content":"..."}],
+  "answer": "正确选项字母",
+  "analysis": "80 字以内解析",
+  "point": "本题考点一句话"
+}`;
+}
+
+function buildVariantReviewPrompt(variant = {}) {
+  const optionText = (Array.isArray(variant.options) ? variant.options : [])
+    .map((option) => `${option?.key || ''}. ${option?.content || ''}`)
+    .join('\n');
+  return `请审核下面这道变式题：
+
+【题干】
+${wrapUntrusted('变式题题干', variant.content || '')}
+
+【选项】
+${wrapUntrusted('变式题选项', optionText)}
+
+【标称答案】
+${wrapUntrusted('标称答案', variant.answer || '')}
+
+【解析】
+${wrapUntrusted('变式题解析', variant.analysis || '')}
+
+只输出 JSON：{"pass":true或false,"issues":["..."],"fixedAnswer":""}`;
+}
+
+function normalizeVariant(raw, fallbackPoint = '') {
+  const options = Array.isArray(raw?.options)
+    ? raw.options
+      .map((option, index) => ({
+        key: String(option?.key || String.fromCharCode(65 + index)).trim().slice(0, 2),
+        content: String(option?.content || '').trim(),
+      }))
+      .filter((option) => option.content)
+    : [];
+  const answer = String(raw?.answer || '').trim().toUpperCase().slice(0, 2);
+  return {
+    content: String(raw?.content || '').trim(),
+    options,
+    answer,
+    analysis: String(raw?.analysis || '').trim(),
+    point: String(raw?.point || fallbackPoint || '').trim(),
+  };
+}
+
+async function createVariantQuestion(settings, payload = {}) {
+  try {
+    const raw = await callModelForJSON(settings, VARIANT_CREATE_SYSTEM, buildVariantCreatePrompt(payload), 1200);
+    const parsed = extractJSONObject(raw);
+    if (!parsed) return { success: false, error: 'AI 没返回合法 JSON，请重试' };
+    const variant = normalizeVariant(parsed);
+    if (!variant.content || variant.options.length < 2 || !variant.answer) {
+      return { success: false, error: '生成的变式题不完整，请重试' };
+    }
+    if (!variant.options.some((option) => option.key === variant.answer)) {
+      return { success: false, error: '生成题目的答案与选项不匹配，请重试' };
+    }
+    return { success: true, variant };
+  } catch (error) {
+    return { success: false, error: compactError(error) || '变式题生成失败' };
+  }
+}
+
+async function reviewVariantQuestion(settings, variant = {}) {
+  try {
+    const raw = await callModelForJSON(settings, VARIANT_REVIEW_SYSTEM, buildVariantReviewPrompt(variant), 600);
+    const parsed = extractJSONObject(raw) || {};
+    const fixed = String(parsed.fixedAnswer || '').trim().toUpperCase();
+    return {
+      success: true,
+      pass: parsed.pass === true,
+      issues: Array.isArray(parsed.issues) ? parsed.issues.map((item) => String(item).slice(0, 80)).slice(0, 4) : [],
+      fixedAnswer: fixed && (variant.options || []).some((option) => option.key === fixed) ? fixed : '',
+    };
+  } catch (error) {
+    // 终审失败不阻塞训练，按「未通过」处理并说明原因
+    return { success: false, pass: false, issues: [compactError(error) || '终审失败'], fixedAnswer: '' };
+  }
+}
+
+/* ==================================================================
+   错题归因（AI 讲解输出主标签，回填错题本错因）
+   ================================================================== */
+const WRONG_CAUSE_KEYS = ['knowledge', 'reading', 'calculation', 'strategy', 'time'];
+const WRONG_CAUSE_LABELS = {
+  knowledge: '知识缺口',
+  reading: '审题偏差',
+  calculation: '计算失误',
+  strategy: '策略不当',
+  time: '时间失控',
+};
+
+const WRONG_CAUSE_SYSTEM = buildSystem(`你是一位错题归因分析师。任务是判断学生做错这道题的「主要原因」，不是讲知识点，也不要重复解析。
+归因只能落在五类之一：
+- knowledge 知识缺口：考点没掌握，概念不清
+- reading 审题偏差：看错问题、漏掉限定条件、误读选项
+- calculation 计算失误：思路正确但算错、抄错数据
+- strategy 策略不当：方法选错、解题顺序不合理、该代入却硬算
+- time 时间失控：耗时过长挤占其他题，或匆忙作答
+只输出 JSON：{"cause":"knowledge|reading|calculation|strategy|time","reason":"一句话说明依据，30 字以内"}`);
+
+function buildWrongCausePrompt(payload = {}) {
+  const { content = '', options = [], userAnswer = '', correctAnswer = '', analysis = '' } = payload;
+  const optionText = (Array.isArray(options) ? options : [])
+    .map((option) => `${option?.key || ''}. ${option?.content || ''}`)
+    .join('\n');
+
+  return `请判断这道题的错因。
+
+【题目】
+${wrapUntrusted('题干', content)}
+
+【选项】
+${wrapUntrusted('选项', optionText)}
+
+【正确答案】
+${wrapUntrusted('正确答案', correctAnswer)}
+
+【学生答案】
+${wrapUntrusted('学生答案', userAnswer)}
+${analysis ? `\n【解析】\n${wrapUntrusted('解析', analysis)}\n` : ''}
+只输出 JSON：{"cause":"...","reason":"..."}`;
+}
+
+async function analyzeWrongCause(settings, payload = {}) {
+  try {
+    const raw = await callModelForJSON(settings, WRONG_CAUSE_SYSTEM, buildWrongCausePrompt(payload), 512);
+    const parsed = extractJSONObject(raw) || {};
+    const cause = String(parsed.cause || '').trim().toLowerCase();
+    if (!WRONG_CAUSE_KEYS.includes(cause)) {
+      return { success: false, error: 'AI 未给出有效错因，请手动选择' };
+    }
+    return {
+      success: true,
+      cause,
+      causeLabel: WRONG_CAUSE_LABELS[cause],
+      reason: String(parsed.reason || '').slice(0, 120),
+    };
+  } catch (error) {
+    return { success: false, error: compactError(error) || '归因失败' };
+  }
+}
+
 module.exports = {
   recognizeQuestions,
   gradeEssay,
   recognizeEssay,
+  analyzeWrongCause,
+  createVariantQuestion,
+  reviewVariantQuestion,
   testConnection,
   chat,
   chatStream,

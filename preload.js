@@ -19,6 +19,8 @@ contextBridge.exposeInMainWorld("openexam", {
     reviewWrongQuestion: (input) => ipcRenderer.invoke("db:reviewWrongQuestion", input),
     setWrongQuestionCause: (questionId, cause) =>
       ipcRenderer.invoke("db:setWrongQuestionCause", { questionId, cause }),
+    saveTrainingAttempt: (payload) => ipcRenderer.invoke("db:saveTrainingAttempt", payload),
+    getTrainingAttempts: (limit) => ipcRenderer.invoke("db:getTrainingAttempts", limit),
     getCategoryStats: (options) => ipcRenderer.invoke("db:getCategoryStats", options),
     getSubjectStats: () => ipcRenderer.invoke("db:getSubjectStats"),
     getAdaptiveQuestions: (options) => ipcRenderer.invoke("db:getAdaptiveQuestions", options),
@@ -128,6 +130,12 @@ contextBridge.exposeInMainWorld("openexam", {
     exportPdf: (payload) => ipcRenderer.invoke("paper:exportPdf", payload),
   },
 
+  // 题库包（跨设备共享题目，不含学习数据与 AI 配置）
+  pack: {
+    exportToFile: (options) => ipcRenderer.invoke("pack:exportToFile", options),
+    importFromFile: () => ipcRenderer.invoke("pack:importFromFile"),
+  },
+
   // AI API
   ai: {
     testConnection: (settings) => ipcRenderer.invoke("ai:testConnection", settings),
@@ -151,5 +159,11 @@ contextBridge.exposeInMainWorld("openexam", {
       ipcRenderer.invoke("ai:gradeEssay", { settings, payload }),
     recognizeEssay: (settings, imageBase64, mimeType) =>
       ipcRenderer.invoke("ai:recognizeEssay", { settings, imageBase64, mimeType }),
+    analyzeWrongCause: (settings, payload) =>
+      ipcRenderer.invoke("ai:analyzeWrongCause", { settings, payload }),
+    createVariant: (settings, payload) =>
+      ipcRenderer.invoke("ai:createVariant", { settings, payload }),
+    reviewVariant: (settings, variant) =>
+      ipcRenderer.invoke("ai:reviewVariant", { settings, variant }),
   }
 });

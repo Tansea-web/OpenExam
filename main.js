@@ -1,8 +1,10 @@
-const { app, BrowserWindow, nativeTheme, ipcMain, nativeImage, protocol } = require("electron");
+const { app, BrowserWindow, nativeTheme, ipcMain, nativeImage, protocol, dialog } = require("electron");
 const path = require("path");
+const fs = require("fs");
 const database = require("./src/main/database.js");
 const trackConfig = require("./src/main/trackConfig.js");
 const backup = require("./src/main/backup.js");
+const questionPack = require("./src/main/questionPack.js");
 const paperExport = require("./src/main/paperExport.js");
 const updater = require("./src/main/updater.js");
 const questionAssets = require("./src/main/questionAssets.js");
@@ -523,6 +525,84 @@ ipcMain.handle("ai:gradeEssay", async (event, { settings, payload }) => {
 
 ipcMain.handle("ai:recognizeEssay", async (event, { settings, imageBase64, mimeType }) => {
   return aiService.recognizeEssay(database.resolveAISecrets(settings), imageBase64, mimeType);
+});
+
+ipcMain.handle("ai:analyzeWrongCause", async (event, { settings, payload }) => {
+  return aiService.analyzeWrongCause(database.resolveAISecrets(settings), payload || {});
+});
+
+ipcMain.handle("ai:createVariant", async (event, { settings, payload }) => {
+  return aiService.createVariantQuestion(database.resolveAISecrets(settings), payload || {});
+});
+
+ipcMain.handle("ai:reviewVariant", async (event, { settings, variant }) => {
+  return aiService.reviewVariantQuestion(database.resolveAISecrets(settings), variant || {});
+});
+
+ipcMain.handle("db:saveTrainingAttempt", (event, payload) => database.saveTrainingAttempt(payload || {}));
+ipcMain.handle("db:getTrainingAttempts", (event, limit) => database.getTrainingAttempts(limit));
+
+/* ─── 题库包：文件导入导出（不含学习数据与 AI 配置） ─── */
+ipcMain.handle("pack:exportToFile", async (event, { subject } = {}) => {
+  try {
+    const data = database.exportQuestionPack({ subject });
+    if (!data.paperCount) return { success: false, error: "该范围下没有可导出的试卷" };
+
+    const pack = {
+      schemaVersion: questionPack.PACK_VERSION,
+      exportedAt: new Date().toISOString(),
+      app: { name: "OpenExam", version: app.getVersion() },
+      scope: { subject: String(subject || ""), label: subject ? "单科目" : "全部题库" },
+      papers: data.papers,
+    };
+
+    const stamp = new Date().toISOString().slice(0, 10);
+    const target = await dialog.showSaveDialog({
+      title: "导出题库包",
+      defaultPath: `openexam-pack-${stamp}.json`,
+      filters: [{ name: "OpenExam 题库包", extensions: ["json"] }],
+    });
+    if (target.canceled || !target.filePath) return { success: false, canceled: true };
+
+    fs.writeFileSync(target.filePath, JSON.stringify(pack, null, 2), "utf8");
+    return {
+      success: true,
+      filePath: target.filePath,
+      paperCount: data.paperCount,
+      questionCount: data.questionCount,
+    };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle("pack:importFromFile", async () => {
+  try {
+    const target = await dialog.showOpenDialog({
+      title: "选择题库包",
+      properties: ["openFile"],
+      filters: [{ name: "OpenExam 题库包", extensions: ["json"] }],
+    });
+    if (target.canceled || !target.filePaths?.length) return { success: false, canceled: true };
+
+    const raw = fs.readFileSync(target.filePaths[0], "utf8");
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (error) {
+      return { success: false, error: "文件不是合法 JSON" };
+    }
+
+    const checked = questionPack.validatePack(parsed);
+    if (!checked.valid) {
+      return { success: false, error: checked.errors.slice(0, 3).join("；"), errors: checked.errors };
+    }
+
+    const result = database.importQuestionPack(checked.pack);
+    return { success: result.importedPapers > 0, filePath: target.filePaths[0], ...result };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
 });
 
 ipcMain.handle("ai:generatePaper", async (event, { settings, config }) => {

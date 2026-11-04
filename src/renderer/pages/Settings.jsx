@@ -60,11 +60,16 @@ const NavIcon = ({ type }) => {
   );
 };
 
-export default function Settings({ onBack, onTracksConfigChange }) {
+export default function Settings({ onBack, onTracksConfigChange, initialSection = 'ai', currentSubject = '' }) {
   const [settings, setSettings] = useState(DEFAULT_AI_SETTINGS);
   const [showKey, setShowKey] = useState(false);
   const [testStatus, setTestStatus] = useState(null);
-  const [activeSection, setActiveSection] = useState('ai');
+  const [activeSection, setActiveSection] = useState(initialSection);
+
+  // 从顶栏「新增 / 管理目标」进来时直接落到目标管理分区
+  useEffect(() => {
+    setActiveSection(initialSection);
+  }, [initialSection]);
   const [persistStatus, setPersistStatus] = useState('loading');
   const [lastSavedAt, setLastSavedAt] = useState('');
   const [connectionState, setConnectionState] = useState(null);
@@ -413,6 +418,58 @@ export default function Settings({ onBack, onTracksConfigChange }) {
     }
   };
 
+  // 题库包：只含试卷与题目，不含学习记录 / 错题 / AI 配置
+  const handleExportPack = async () => {
+    if (!window.openexam?.pack?.exportToFile) {
+      await showAlert({ title: '暂不支持', message: '当前环境不支持导出题库包。', tone: 'warning' });
+      return;
+    }
+    setBackupBusy('pack-export');
+    try {
+      const result = await window.openexam.pack.exportToFile({ subject: currentSubject || '' });
+      if (result?.canceled) return;
+      if (!result?.success) {
+        await showAlert({ title: '导出失败', message: result?.error || '未知错误', tone: 'danger' });
+        return;
+      }
+      await showAlert({
+        title: '题库包已导出',
+        message: `${result.paperCount} 套试卷 / ${result.questionCount} 道题\n${result.filePath}`,
+        tone: 'success',
+      });
+    } catch (error) {
+      await showAlert({ title: '导出失败', message: error.message || '未知错误', tone: 'danger' });
+    } finally {
+      setBackupBusy('');
+    }
+  };
+
+  const handleImportPack = async () => {
+    if (!window.openexam?.pack?.importFromFile) {
+      await showAlert({ title: '暂不支持', message: '当前环境不支持导入题库包。', tone: 'warning' });
+      return;
+    }
+    setBackupBusy('pack-import');
+    try {
+      const result = await window.openexam.pack.importFromFile();
+      if (result?.canceled) return;
+      if (!result?.success) {
+        await showAlert({ title: '导入失败', message: result?.error || '未知错误', tone: 'danger' });
+        return;
+      }
+      const failed = Array.isArray(result.failures) ? result.failures : [];
+      await showAlert({
+        title: '题库包导入完成',
+        message: `新增 ${result.importedPapers} 套试卷 / ${result.importedQuestions} 道题${failed.length ? `\n${failed.length} 套失败：${failed.slice(0, 2).join('；')}` : ''}`,
+        tone: 'success',
+      });
+    } catch (error) {
+      await showAlert({ title: '导入失败', message: error.message || '未知错误', tone: 'danger' });
+    } finally {
+      setBackupBusy('');
+    }
+  };
+
   const handleResetUserData = async () => {
     if (!window.openexam?.db?.resetUserData) {
       await showAlert({ title: '暂不支持', message: '当前环境不支持重置用户数据。', tone: 'warning' });
@@ -747,6 +804,20 @@ export default function Settings({ onBack, onTracksConfigChange }) {
                     <p style={{ fontSize: 11, color: "var(--muted)", margin: 0, lineHeight: 1.6 }}>从备份文件恢复同一套体验，包含个人历史、错题、设置、聊天记录与自定义内容</p>
                   </div>
                   <button onClick={handleImportBackupData} disabled={backupBusy === 'import'} style={{ marginTop: "auto", padding: "8px 0", borderRadius: 6, border: "1px solid #566eff", background: "transparent", color: "#566eff", fontSize: 12, fontWeight: 600, cursor: backupBusy === 'import' ? 'wait' : 'pointer', opacity: backupBusy === 'import' ? 0.7 : 1 }}>{backupBusy === 'import' ? '正在导入…' : '选择备份文件'}</button>
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "16px", background: "transparent", borderRadius: 0, borderRight: "1px solid var(--line)", minWidth: 0 }}>
+                  <div style={{ color: "var(--success)", display: "grid", placeItems: "center", width: 20 }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+                  </div>
+                  <div>
+                    <h4 style={{ fontSize: 14, fontWeight: 600, margin: "0 0 4px 0", color: "var(--text)" }}>题库包</h4>
+                    <p style={{ fontSize: 11, color: "var(--muted)", margin: 0, lineHeight: 1.6 }}>只导出题目与试卷，不含学习记录和 AI 配置；换设备、分享题库或给手机端预置题库时用</p>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, marginTop: "auto" }}>
+                    <button onClick={handleExportPack} disabled={backupBusy === 'pack-export'} style={{ flex: 1, padding: "8px 0", borderRadius: 6, border: "1px solid var(--success)", background: "transparent", color: "var(--success)", fontSize: 12, fontWeight: 600, cursor: backupBusy === 'pack-export' ? 'wait' : 'pointer', opacity: backupBusy === 'pack-export' ? 0.7 : 1 }}>{backupBusy === 'pack-export' ? '导出中…' : '导出'}</button>
+                    <button onClick={handleImportPack} disabled={backupBusy === 'pack-import'} style={{ flex: 1, padding: "8px 0", borderRadius: 6, border: "1px solid var(--success)", background: "transparent", color: "var(--success)", fontSize: 12, fontWeight: 600, cursor: backupBusy === 'pack-import' ? 'wait' : 'pointer', opacity: backupBusy === 'pack-import' ? 0.7 : 1 }}>{backupBusy === 'pack-import' ? '导入中…' : '导入'}</button>
+                  </div>
                 </div>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "16px 0 16px 16px", background: "transparent", borderRadius: 0, minWidth: 0 }}>

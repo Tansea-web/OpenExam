@@ -21,6 +21,9 @@ npm-debug.log*
 # CodeBuddy local session data
 .codebuddy/
 
+# 打包产物
+release/
+
 # Environment
 .env
 .env.local

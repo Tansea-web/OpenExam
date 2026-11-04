@@ -1,6 +1,6 @@
 {
   "name": "openexam",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "private": true,
   "main": "main.js",
   "scripts": {
@@ -18,6 +18,7 @@
     "sanitize:seed": "cross-env ELECTRON_RUN_AS_NODE=1 electron scripts/sanitize-seed.js",
     "seed:essay": "cross-env ELECTRON_RUN_AS_NODE=1 electron scripts/seed-essay-prompts.js",
     "import:paper": "cross-env ELECTRON_RUN_AS_NODE=1 electron scripts/import-paper-json.js",
+    "eval:ai": "electron scripts/eval-prompts.js",
     "rewrite:analyses": "python3 scripts/original/rewrite_seed_analyses.py",
     "export:papers": "python3 scripts/original/export_all_papers.py",
     "patch:question-quality": "ELECTRON_RUN_AS_NODE=1 electron scripts/patch-question-quality.js --seed",
@@ -49,6 +50,7 @@
     "appId": "com.openexam.app",
     "productName": "OpenExam",
     "asar": true,
+    "npmRebuild": false,
     "asarUnpack": [
       "**/*.node"
     ],
@@ -78,7 +80,8 @@
       "icon": "build/icon.ico",
       "target": [
         "nsis"
-      ]
+      ],
+      "signAndEditExecutable": false
     },
     "nsis": {
       "oneClick": false,
@@ -89,7 +92,7 @@
     "publish": [
       {
         "provider": "github",
-        "owner": "lmk1010",
+        "owner": "Tansea-web",
         "repo": "OpenExam",
         "releaseType": "release"
       }

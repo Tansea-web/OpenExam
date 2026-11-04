@@ -73,18 +73,21 @@ const BUILTIN_TRACKS = [
     ],
   },
   {
+    // 软考不是官方内置目标：用户可以改名、换科目，也可以整个删除
     key: 'ruankao',
     label: '软考',
     shortLabel: '软考',
     features: RUANKAO_FEATURES,
     sort: 30,
+    builtin: 0,
     subjects: [
       {
         key: 'computer',
         label: '网络工程师',
         emptySubject: 0,
         sort: 10,
-        categories: COMPUTER_CATEGORIES,
+        builtin: 0,
+        categories: COMPUTER_CATEGORIES.map((item) => ({ ...item, builtin: 0 })),
       },
     ],
   },
@@ -191,15 +194,15 @@ function mapCategory(row) {
 function seedBuiltin() {
   const insertTrack = db.prepare(`
     INSERT OR IGNORE INTO study_tracks (key, label, short_label, features, sort, builtin, enabled)
-    VALUES (@key, @label, @shortLabel, @features, @sort, 1, 1)
+    VALUES (@key, @label, @shortLabel, @features, @sort, @builtin, 1)
   `);
   const insertSubject = db.prepare(`
     INSERT OR IGNORE INTO track_subjects (key, track_key, label, empty_subject, sort, builtin)
-    VALUES (@key, @trackKey, @label, @emptySubject, @sort, 1)
+    VALUES (@key, @trackKey, @label, @emptySubject, @sort, @builtin)
   `);
   const insertCategory = db.prepare(`
     INSERT OR IGNORE INTO track_categories (subject_key, key, name, color, sort, builtin)
-    VALUES (@subjectKey, @key, @name, @color, @sort, 1)
+    VALUES (@subjectKey, @key, @name, @color, @sort, @builtin)
   `);
 
   db.transaction(() => {
@@ -210,6 +213,7 @@ function seedBuiltin() {
         shortLabel: track.shortLabel,
         features: JSON.stringify(track.features),
         sort: track.sort,
+        builtin: track.builtin === 0 ? 0 : 1,
       });
       track.subjects.forEach((subject) => {
         insertSubject.run({
@@ -218,6 +222,7 @@ function seedBuiltin() {
           label: subject.label,
           emptySubject: subject.emptySubject ? 1 : 0,
           sort: subject.sort,
+          builtin: subject.builtin === 0 ? 0 : 1,
         });
         subject.categories.forEach((category) => {
           insertCategory.run({
@@ -226,6 +231,7 @@ function seedBuiltin() {
             name: category.name,
             color: category.color,
             sort: category.sort,
+            builtin: category.builtin === 0 ? 0 : 1,
           });
         });
       });
@@ -237,6 +243,11 @@ function initTrackConfig(database) {
   db = database;
   db.exec(SCHEMA);
   seedBuiltin();
+
+  // 历史库里软考曾被当作内置目标，放开为可编辑 / 可删除（builtin 是系统字段，用户改不了）
+  db.prepare(`UPDATE study_tracks SET builtin = 0 WHERE key = 'ruankao' AND builtin = 1`).run();
+  db.prepare(`UPDATE track_subjects SET builtin = 0 WHERE key = 'computer' AND builtin = 1`).run();
+  db.prepare(`UPDATE track_categories SET builtin = 0 WHERE subject_key = 'computer' AND builtin = 1`).run();
 }
 
 function countSubjectPapers(subjectKey) {

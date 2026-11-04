@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import RichQuestionContent from "../components/RichQuestionContent.jsx";
 import { CATEGORY_META } from "../../shared/categoryMeta.js";
 import { WRONG_CAUSES, getWrongCauseLabel, getWrongCauseMeta } from "../constants/wrongCauses.js";
+import { getAISettings, isAIConfigured } from "../store/aiSettings.js";
 
 const CN = Object.fromEntries(Object.entries(CATEGORY_META).map(([key, meta]) => [key, meta.name]));
 const FILTERS = [{ key: "due", label: "待复习" }, { key: "all", label: "全部" }, { key: "learning", label: "熟悉中" }, { key: "mastered", label: "已掌握" }];
@@ -38,7 +39,7 @@ const normalizeOptions = (options) => Array.isArray(options) ? options.map((opt)
   content: String(opt?.content || ""),
 })).filter((opt) => opt.key) : [];
 
-export default function WrongBook({ onRedo, onAskAI, subject = "", trackLabel = "" }) {
+export default function WrongBook({ onRedo, onAskAI, onVariant, subject = "", trackLabel = "" }) {
   const [list, setList] = useState([]), [loading, setLoading] = useState(true), [filter, setFilter] = useState("due"), [causeFilter, setCauseFilter] = useState("all"), [expandedId, setExpandedId] = useState(null), [busyId, setBusyId] = useState(""), [error, setError] = useState("");
   const loadList = async () => {
     if (!window.openexam?.db?.getWrongQuestions) return setLoading(false);
@@ -90,6 +91,35 @@ export default function WrongBook({ onRedo, onAskAI, subject = "", trackLabel = 
       setList((prev) => prev.map((row) => (row.id === updated.id ? { ...row, cause: updated.cause } : row)));
     } catch (e) {
       setError(e.message || '错因保存失败');
+    }
+    setBusyId('');
+  };
+
+  // AI 归因：让模型判断五类错因并回填
+  const analyzeCause = async (item) => {
+    if (!isAIConfigured()) {
+      setError('还没有配置 AI，先在「设置 → AI 模型」里填 API Key 再用 AI 归因');
+      return;
+    }
+    setBusyId(`${item.id}:ai`);
+    setError('');
+    try {
+      let options = [];
+      try { options = item.options ? JSON.parse(item.options) : []; } catch (e) { options = []; }
+      const result = await window.openexam.ai.analyzeWrongCause(getAISettings(), {
+        content: item.content || '',
+        options: Array.isArray(options) ? options : [],
+        userAnswer: item.user_answer || '',
+        correctAnswer: item.correct_answer || item.answer || '',
+        analysis: item.analysis || '',
+      });
+      if (result?.success && result.cause) {
+        await updateCause(item, result.cause);
+      } else {
+        setError(result?.error || 'AI 归因失败，请手动选择错因');
+      }
+    } catch (e) {
+      setError(e.message || 'AI 归因失败');
     }
     setBusyId('');
   };
@@ -364,6 +394,46 @@ export default function WrongBook({ onRedo, onAskAI, subject = "", trackLabel = 
                           {item.cause}
                         </span>
                       )}
+                      {onVariant && (
+                        <button
+                          type="button"
+                          onClick={() => onVariant(item)}
+                          title="用 AI 生成一道同考点的变式题"
+                          style={{
+                            marginLeft: "auto",
+                            padding: "3px 10px",
+                            borderRadius: 999,
+                            border: "1px solid var(--line)",
+                            background: "transparent",
+                            color: "var(--muted)",
+                            fontSize: 11,
+                            fontWeight: 600,
+                            cursor: "pointer",
+                          }}
+                        >
+                          变式训练
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => analyzeCause(item)}
+                        disabled={busyId === `${item.id}:ai` || Boolean(busyId)}
+                        title="让 AI 判断这道题的错因"
+                        style={{
+                          marginLeft: onVariant ? 0 : "auto",
+                          padding: "3px 10px",
+                          borderRadius: 999,
+                          border: "1px solid var(--accent-border-soft)",
+                          background: "var(--accent-soft-bg)",
+                          color: "var(--accent)",
+                          fontSize: 11,
+                          fontWeight: 600,
+                          cursor: busyId ? "wait" : "pointer",
+                          opacity: busyId ? 0.6 : 1,
+                        }}
+                      >
+                        {busyId === `${item.id}:ai` ? "归因中…" : "AI 归因"}
+                      </button>
                     </div>
                     {Array.isArray(item.options) && item.options.length > 0 && (
                       <div style={{ display: "grid", gap: 0, marginTop: 12 }}>

@@ -10,6 +10,7 @@ import ExamResult from "./pages/ExamResult.jsx";
 import ImportPaper from "./pages/ImportPaper.jsx";
 import Settings from "./pages/Settings.jsx";
 import AITeacher from "./pages/AITeacher.jsx";
+import AITraining from "./pages/AITraining.jsx";
 import AIGenerate from "./pages/AIGenerate.jsx";
 import WrongBook from "./pages/WrongBook.jsx";
 import Analytics from "./pages/Analytics.jsx";
@@ -251,6 +252,12 @@ export default function App() {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [profile, setProfile] = useState({ name: "考生用户" });
   const [examTrackLoaded, setExamTrackLoaded] = useState(false);
+  // 从哪个页面跳去问 AI，返回时按原路回去
+  const [aiReturnPage, setAiReturnPage] = useState('today');
+  // 设置页打开时落在哪个分区（从目标下拉进来时直接到「目标管理」）
+  const [settingsSection, setSettingsSection] = useState('ai');
+  // AI 变式训练的源题
+  const [trainingSource, setTrainingSource] = useState(null);
   const userMenuRef = useRef(null);
   const onboardingCloseTimerRef = useRef(null);
   const appRevealTimerRef = useRef(null);
@@ -558,8 +565,41 @@ export default function App() {
 
   const goAskAI = (question, extra = {}) => {
     writeAIContext(question, extra);
+    // 记住来路，AI 页返回时原路返回（答题页要额外恢复进度）
+    setAiReturnPage(page || 'today');
     setActiveTab('');
     setPage('ai-teacher');
+  };
+
+  // AI 页返回：答题中被中断的会话重新挂载并回到原来的题
+  const handleAIBack = async () => {
+    const target = aiReturnPage || 'today';
+
+    if (target === 'practice-exam') {
+      const key = practiceConfig?.sourcePaperId;
+      try {
+        const record = await findResumableRecord(key);
+        if (record) setExamResumeRecord(record);
+      } catch (error) {
+        console.error('恢复练习进度失败:', error);
+      }
+      setPage('practice-exam');
+      return;
+    }
+
+    if (target === 'exam' && currentPaperId) {
+      try {
+        const record = await findResumableRecord(currentPaperId);
+        await actions.startExam(currentPaperId);
+        setExamResumeRecord(record);
+      } catch (error) {
+        console.error('恢复模考进度失败:', error);
+      }
+      setPage('exam');
+      return;
+    }
+
+    setPage(target);
   };
 
   const handleStartExam = async (paperId, options = {}) => {
@@ -717,8 +757,36 @@ export default function App() {
       await showAlert({ title: '暂不支持', message: '当前版本不支持自适应抽题。', tone: 'warning' });
       return;
     }
+
+    // 固定会话 key：同一份自适应练习能被继续、也能在问 AI 后找回
+    const sessionKey = buildPracticeSessionKey('adaptive', 'all', trackSubject);
+    let resumeRecord = null;
+    try { resumeRecord = await findResumableRecord(sessionKey); } catch (error) { console.error(error); }
+    if (resumeRecord) {
+      const answeredCount = Object.keys(resumeRecord.answers || {}).length;
+      const continueResume = await showConfirm({
+        title: '检测到未完成的自适应练习',
+        message: `上次已作答 ${answeredCount} 题，是否继续上次那份题目？`,
+        confirmText: '继续作答',
+        cancelText: '重新抽题',
+        tone: 'info',
+      });
+      if (!continueResume) {
+        try { await archiveRecord(resumeRecord); } catch (error) { console.error(error); }
+        resumeRecord = null;
+      }
+    }
+
     try {
-      const questions = await window.openexam.db.getAdaptiveQuestions({ subject: trackSubject, limit: 20 });
+      let questions;
+      if (resumeRecord?.meta?.questions?.length) {
+        questions = resumeRecord.meta.questions;
+      } else if (resumeRecord?.meta?.questionIds?.length && window.openexam.db.getQuestionsByIds) {
+        questions = await window.openexam.db.getQuestionsByIds(resumeRecord.meta.questionIds);
+      } else {
+        questions = await window.openexam.db.getAdaptiveQuestions({ subject: trackSubject, limit: 20 });
+      }
+
       if (!questions.length) {
         await showAlert({ title: '暂无题目', message: '该目标的题库还没有可练习的题目，先导入或用 AI 出一套。', tone: 'info' });
         return;
@@ -729,10 +797,10 @@ export default function App() {
         title: `自适应练习 · ${questions.length} 题`,
         category: 'adaptive',
         subject: trackSubject,
-        sourcePaperId: `adaptive_${Date.now()}`,
+        sourcePaperId: sessionKey,
         durationMinutes: Math.max(10, Math.ceil(questions.length * 1.2)),
       });
-      setExamResumeRecord(null);
+      setExamResumeRecord(resumeRecord);
       setResultReturnPage('practice');
       setPage('practice-exam');
     } catch (error) {
@@ -1092,7 +1160,7 @@ export default function App() {
               </svg>
               <span className="rail-icon-text">主控制台</span>
             </button>
-            <button className={`rail-bottom-icon settings-icon ${page === 'settings' ? 'active' : ''}`} data-tip="系统设置" onClick={() => setPage('settings')}>
+            <button className={`rail-bottom-icon settings-icon ${page === 'settings' ? 'active' : ''}`} data-tip="系统设置" onClick={() => { setSettingsSection('ai'); setPage('settings'); }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="3"/>
                 <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
@@ -1147,6 +1215,17 @@ export default function App() {
                     if (page === "practice" || page === "import") setPage("practice");
                   }}
                   options={tracksConfig.tracks.map((track) => ({ value: track.key, label: track.label }))}
+                  footer={
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSettingsSection('tracks');
+                        setPage('settings');
+                      }}
+                    >
+                      ＋ 新增 / 管理目标
+                    </button>
+                  }
                 />
               </div>
               <button className="search" type="button" onClick={handleOpenPaperSearch} title="搜索试卷">
@@ -1207,7 +1286,7 @@ export default function App() {
                 <button className="theme-toggle" onClick={() => setTheme(theme === "light" ? "dark" : "light")}>
                   {theme === "light" ? "☾" : "☀"}
                 </button>
-                <button className="settings-btn" onClick={() => setPage("settings")}> 
+                <button className="settings-btn" onClick={() => { setSettingsSection("ai"); setPage("settings"); }}> 
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
                   </svg>
@@ -1272,6 +1351,8 @@ export default function App() {
                   onBack={() => setPage("home")}
                   tracksConfig={tracksConfig}
                   onTracksConfigChange={(next) => setTracksConfig(buildTracksConfig(next))}
+                  initialSection={settingsSection}
+                  currentSubject={trackSubject}
                 />
               ) : page === "ai-generate" ? (
                 <AIGenerate
@@ -1280,11 +1361,27 @@ export default function App() {
                   onOpenPaper={(paper) => handleOpenPaper(paper, 'ai-generate')}
                 />
               ) : page === "ai-teacher" ? (
-                <AITeacher />
+                <AITeacher onBack={handleAIBack} />
+              ) : page === "ai-training" ? (
+                <AITraining
+                  source={trainingSource}
+                  onBack={() => { setActiveTab(''); setPage('wrong-book'); }}
+                />
               ) : page === "wrong-book" ? (
                 <WrongBook
                   subject={trackSubject}
                   trackLabel={trackLabel}
+                  onVariant={(item) => {
+                    setTrainingSource({
+                      id: item.question_id || item.id,
+                      content: item.content || '',
+                      options: item.options || '[]',
+                      answer: item.answer || item.correct_answer || '',
+                      analysis: item.analysis || '',
+                    });
+                    setActiveTab('');
+                    setPage('ai-training');
+                  }}
                   onRedo={handleStartWrongRedo}
                   onAskAI={(item) => goAskAI({
                     id: item.question_id || item.id,
@@ -1300,7 +1397,7 @@ export default function App() {
               ) : page === "analytics" ? (
                 <Analytics
                   tracksConfig={tracksConfig}
-                  onOpenSettings={() => setPage("settings")}
+                  onOpenSettings={() => { setSettingsSection("ai"); setPage("settings"); }}
                   onStartRecommend={handleStartRecommend}
                   onStartPractice={(category) => handleStartPractice(category, 'all', { questionCount: 10, mode: 'practice', shuffle: true })}
                 />

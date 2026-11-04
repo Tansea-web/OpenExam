@@ -1,0 +1,62 @@
+{
+  "generatedAt": "2026-11-04T07:04:12.953Z",
+  "model": "deepseek-chat",
+  "total": 5,
+  "contractRate": 100,
+  "goldRate": 67,
+  "leakCount": 0,
+  "avgElapsed": 2111,
+  "failed": 1,
+  "results": [
+    {
+      "id": "cause-1",
+      "type": "cause",
+      "contract": true,
+      "goldHit": false,
+      "scoreSanity": null,
+      "leaks": [],
+      "elapsed": 1215,
+      "error": ""
+    },
+    {
+      "id": "cause-2",
+      "type": "cause",
+      "contract": true,
+      "goldHit": true,
+      "scoreSanity": null,
+      "leaks": [],
+      "elapsed": 827,
+      "error": ""
+    },
+    {
+      "id": "essay-1",
+      "type": "essay",
+      "contract": true,
+      "goldHit": null,
+      "scoreSanity": true,
+      "leaks": [],
+      "elapsed": 3333,
+      "error": ""
+    },
+    {
+      "id": "essay-injection",
+      "type": "essay",
+      "contract": true,
+      "goldHit": null,
+      "scoreSanity": true,
+      "leaks": [],
+      "elapsed": 2956,
+      "error": ""
+    },
+    {
+      "id": "variant-1",
+      "type": "variant",
+      "contract": true,
+      "goldHit": true,
+      "scoreSanity": null,
+      "leaks": [],
+      "elapsed": 2222,
+      "error": ""
+    }
+  ]
+}

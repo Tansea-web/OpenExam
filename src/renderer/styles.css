@@ -222,7 +222,12 @@ button {
   height: 100vh;
   background: var(--surface);
   display: grid;
+  /* 顶栏横跨两列，侧栏与内容区在第二行：品牌区从窗口最左侧开始，排版更整 */
   grid-template-columns: 80px 1fr;
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas:
+    "header header"
+    "rail body";
   transition: grid-template-columns 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   overflow: hidden;
 }
@@ -232,15 +237,18 @@ button {
 }
 
 .rail {
+  grid-area: rail;
   width: 100%;
   background: var(--surface);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 10px;
-  padding: 50px 0 18px;
+  padding: 6px 0 18px;
   border-right: 1px solid var(--line);
   position: relative;
+  min-height: 0;
+  overflow: hidden;
   /* 悬浮提示（::before）伸出侧栏绘制在右侧工作区之上，需要把侧栏整体提到更高层级，
      否则会被 DOM 顺序在后的 workspace 内容遮住（tooltip 自身的 z-index 只在本上下文内生效） */
   z-index: 60;
@@ -262,6 +270,10 @@ button {
 @keyframes fadeIn {
   from { opacity: 0; transform: translateX(-4px); }
   to { opacity: 1; transform: translateX(0); }
+}
+
+.rail > * {
+  flex-shrink: 0;
 }
 
 .rail-menu {
@@ -352,11 +364,16 @@ button {
 
 .frame.sidebar-expanded .rail-icon,
 .frame.sidebar-expanded .rail-bottom-icon,
-.frame.sidebar-expanded .rail-chat,
-.frame.sidebar-expanded .rail-bottom {
+.frame.sidebar-expanded .rail-chat {
   width: 160px;
   justify-content: flex-start;
   padding-left: 14px;
+}
+
+/* 底部是容器，宽度跟按钮一致但不能再叠加左内边距，否则子按钮会溢出容器、比上方图标宽一截 */
+.frame.sidebar-expanded .rail-bottom {
+  width: 160px;
+  padding-left: 0;
 }
 
 .rail-icon:hover {
@@ -447,15 +464,13 @@ button {
   transform: translateY(-2px);
 }
 
+/* display: contents 让 header / body 直接参与 .frame 的网格分区 */
 .workspace {
-  display: flex;
-  flex-direction: column;
-  background: var(--surface);
-  overflow: hidden;
-  height: 100vh;
+  display: contents;
 }
 
 .workspace-header {
+  grid-area: header;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -464,6 +479,7 @@ button {
   background: var(--surface);
   border-bottom: 1px solid var(--line);
   -webkit-app-region: drag;
+  min-width: 0;
 }
 
 .workspace-header-main {
@@ -748,12 +764,13 @@ button {
 }
 
 .workspace-body {
+  grid-area: body;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 300px;
   gap: 10px;
   padding: 10px 16px;
   background: var(--surface);
-  flex: 1;
+  min-height: 0;
   overflow: hidden;
   align-items: stretch;
 }
@@ -7176,6 +7193,34 @@ button {
 .oe-select-option.is-active {
   color: var(--accent);
   font-weight: 700;
+  background: var(--accent-soft-bg);
+}
+
+/* 下拉底部附加操作（如「新增 / 管理目标」） */
+.oe-select-footer {
+  border-top: 1px solid var(--line);
+  margin-top: 4px;
+  padding-top: 4px;
+}
+
+.oe-select-footer button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.oe-select-footer button:hover {
   background: var(--accent-soft-bg);
 }
 

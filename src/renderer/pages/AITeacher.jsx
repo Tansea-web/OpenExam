@@ -138,7 +138,7 @@ function MsgContent({ content }) {
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
-export default function AITeacher() {
+export default function AITeacher({ onBack }) {
   const [messages, setMessages] = useState([
     { role: "assistant", content: DEFAULT_ASSISTANT_MESSAGE }
   ]);
@@ -623,7 +623,25 @@ export default function AITeacher() {
       {/* ── HEADER ── */}
       <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 22px 10px", borderBottom: "1px solid var(--line)", flexShrink: 0 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <div style={{ fontSize: 11, color: "var(--muted)" }}>我的 › AI 老师</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 11, color: "var(--muted)" }}>
+            {onBack && (
+              <button
+                type="button"
+                onClick={onBack}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 3, padding: 0,
+                  border: "none", background: "transparent", color: "var(--muted)",
+                  fontSize: 11, cursor: "pointer",
+                }}
+              >
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="15 18 9 12 15 6" />
+                </svg>
+                返回
+              </button>
+            )}
+            <span>我的 › AI 老师</span>
+          </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ width: 26, height: 26, borderRadius: 7, background: "linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%)", display: "grid", placeItems: "center", color: "#fff", boxShadow: "0 8px 18px rgba(15,23,42,0.08)" }}>
               <Ico d={ICONS.chat} size={13} col="#fff" sw={2} />

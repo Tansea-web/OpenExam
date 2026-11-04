@@ -1263,6 +1263,73 @@ function importPaper(paperData, questions) {
   return savePaperBundle({ ...paperData, type: 'imported' }, questions, 'imported');
 }
 
+/** 导出题库包：只含试卷与题目，不含学习记录 / 错题 / AI 配置 */
+function exportQuestionPack(options = {}) {
+  const subject = String(options?.subject || '').trim();
+  const papers = subject
+    ? db.prepare('SELECT * FROM papers WHERE subject = ? ORDER BY year DESC, created_at DESC').all(subject)
+    : db.prepare('SELECT * FROM papers ORDER BY subject, year DESC, created_at DESC').all();
+
+  const questionStmt = db.prepare('SELECT * FROM questions WHERE paper_id = ? ORDER BY order_num');
+  const packPapers = [];
+  let questionCount = 0;
+
+  papers.forEach((paper) => {
+    const rows = questionStmt.all(paper.id);
+    if (!rows.length) return;
+    const questions = rows.map((row) => ({
+      id: row.id,
+      content: row.content || '',
+      options: (() => { try { return JSON.parse(row.options || '[]'); } catch (error) { return []; } })(),
+      answer: row.answer || '',
+      analysis: row.analysis || '',
+      category: row.category || '',
+      subCategory: row.sub_category || '',
+      type: row.type || 'single',
+    }));
+    packPapers.push({
+      id: paper.id,
+      title: paper.title || '',
+      year: paper.year || null,
+      type: paper.type || 'imported',
+      subject: paper.subject || '',
+      questions,
+    });
+    questionCount += questions.length;
+  });
+
+  return { papers: packPapers, paperCount: packPapers.length, questionCount, subject };
+}
+
+/** 导入题库包：逐套走 importPaper，题目分类会按当前词表归一化 */
+function importQuestionPack(pack) {
+  const papers = Array.isArray(pack?.papers) ? pack.papers : [];
+  if (!papers.length) throw new Error('题库包里没有试卷');
+
+  let importedPapers = 0;
+  let importedQuestions = 0;
+  const failures = [];
+
+  papers.forEach((paper) => {
+    try {
+      const result = importPaper(
+        {
+          title: paper.title,
+          year: paper.year,
+          subject: paper.subject || 'xingce',
+        },
+        paper.questions
+      );
+      importedPapers += 1;
+      importedQuestions += Number(result?.questionCount) || 0;
+    } catch (error) {
+      failures.push(`${paper.title || '未命名试卷'}: ${error.message}`);
+    }
+  });
+
+  return { importedPapers, importedQuestions, failures };
+}
+
 function saveAIPaper(paperData, questions) {
   return savePaperBundle({ ...paperData, type: normalizeSavedPaperType(paperData?.type, 'ai_exam') }, questions, 'ai_exam');
 }
@@ -2356,6 +2423,8 @@ module.exports = {
   addWrongQuestion,
   setWrongQuestionCause,
   getWrongQuestions,
+  exportQuestionPack,
+  importQuestionPack,
   reviewWrongQuestion,
   getCategoryStats,
   getSubjectStats,

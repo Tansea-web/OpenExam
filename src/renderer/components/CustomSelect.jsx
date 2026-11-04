@@ -10,6 +10,7 @@ export default function CustomSelect({
   compact = false,
   ariaLabel,
   placeholder = "请选择",
+  footer = null,
 }) {
   const [open, setOpen] = useState(false);
   const [menuStyle, setMenuStyle] = useState(null);
@@ -122,6 +123,11 @@ export default function CustomSelect({
               </button>
             );
           })}
+          {footer ? (
+            <div className="oe-select-footer" onClick={() => setOpen(false)}>
+              {footer}
+            </div>
+          ) : null}
         </div>,
         document.body
       )}

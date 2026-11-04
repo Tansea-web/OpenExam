@@ -189,6 +189,23 @@ function initStudyPlan(database) {
     CREATE INDEX IF NOT EXISTS idx_essay_attempts_prompt ON essay_attempts(prompt_id);
     CREATE INDEX IF NOT EXISTS idx_essay_attempts_created ON essay_attempts(created_at DESC);
 
+    -- AI 变式训练：源题 → 生成变式 → 终审 → 作答
+    CREATE TABLE IF NOT EXISTS ai_training_attempts (
+      id TEXT PRIMARY KEY,
+      source_question_id TEXT,
+      source_content TEXT,
+      variant_content TEXT,
+      variant_options TEXT,
+      variant_answer TEXT,
+      variant_analysis TEXT,
+      review_passed INTEGER DEFAULT 0,
+      review_note TEXT,
+      user_answer TEXT,
+      is_correct INTEGER,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_training_created ON ai_training_attempts(created_at DESC);
+
     -- 申论草稿（每题一份，自动保存）
     CREATE TABLE IF NOT EXISTS essay_drafts (
       prompt_id TEXT PRIMARY KEY,
@@ -1077,6 +1094,53 @@ function deleteEssayDraft(promptId) {
   return { success: true };
 }
 
+/* AI 变式训练记录 */
+function saveTrainingAttempt(input = {}) {
+  const id = String(input.id || `train_${Date.now()}`).trim();
+  db.prepare(`
+    INSERT INTO ai_training_attempts (
+      id, source_question_id, source_content, variant_content, variant_options,
+      variant_answer, variant_analysis, review_passed, review_note, user_answer, is_correct
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      user_answer = excluded.user_answer,
+      is_correct = excluded.is_correct
+  `).run(
+    id,
+    String(input.sourceQuestionId || ''),
+    String(input.sourceContent || ''),
+    String(input.variantContent || ''),
+    JSON.stringify(Array.isArray(input.variantOptions) ? input.variantOptions : []),
+    String(input.variantAnswer || ''),
+    String(input.variantAnalysis || ''),
+    input.reviewPassed ? 1 : 0,
+    String(input.reviewNote || ''),
+    String(input.userAnswer || ''),
+    input.isCorrect === true ? 1 : input.isCorrect === false ? 0 : null
+  );
+  return { success: true, id };
+}
+
+function getTrainingAttempts(limit = 30) {
+  const safeLimit = Math.min(200, Math.max(1, Number(limit) || 30));
+  return db.prepare(`
+    SELECT * FROM ai_training_attempts ORDER BY created_at DESC LIMIT ?
+  `).all(safeLimit).map((row) => ({
+    id: row.id,
+    sourceQuestionId: row.source_question_id,
+    variantContent: row.variant_content,
+    variantOptions: (() => { try { return JSON.parse(row.variant_options || '[]'); } catch (e) { return []; } })(),
+    variantAnswer: row.variant_answer,
+    variantAnalysis: row.variant_analysis,
+    reviewPassed: row.review_passed === 1,
+    reviewNote: row.review_note,
+    userAnswer: row.user_answer,
+    isCorrect: row.is_correct === 1 ? true : row.is_correct === 0 ? false : null,
+    createdAt: row.created_at,
+  }));
+}
+
 /** 今天该练哪道：优先没做过的，其次分最低的 */
 function getEssayRecommendation(options = {}) {
   const essayType = options.essayType || 'guina';
@@ -1129,6 +1193,9 @@ module.exports = {
   saveEssayDraft,
   getEssayDraft,
   deleteEssayDraft,
+  // AI 变式训练
+  saveTrainingAttempt,
+  getTrainingAttempts,
   deleteEssayPrompt,
   saveEssayAttempt,
   getEssayAttempts,

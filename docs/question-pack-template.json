@@ -1,0 +1,53 @@
+{
+  "schemaVersion": "openexam.pack.v1",
+  "exportedAt": "2026-11-04T00:00:00.000Z",
+  "app": {
+    "name": "OpenExam",
+    "version": "0.3.0"
+  },
+  "scope": {
+    "subject": "computer",
+    "label": "单科目"
+  },
+  "papers": [
+    {
+      "id": "sample-paper-1",
+      "title": "示例试卷（可改标题）",
+      "year": 2026,
+      "type": "imported",
+      "subject": "computer",
+      "questions": [
+        {
+          "id": "sample-q-1",
+          "content": "下列属于链路状态路由协议的是：",
+          "options": [
+            { "key": "A", "content": "RIP" },
+            { "key": "B", "content": "OSPF" },
+            { "key": "C", "content": "BGP" },
+            { "key": "D", "content": "RIPv2" }
+          ],
+          "answer": "B",
+          "analysis": "OSPF 通过 LSA 建立链路状态数据库并用 SPF 计算最短路径；RIP 是距离矢量，BGP 是路径矢量。",
+          "category": "cs_net",
+          "subCategory": "cs_net",
+          "type": "single"
+        },
+        {
+          "id": "sample-q-2",
+          "content": "192.168.10.130/26 所在子网的网络地址是：",
+          "options": [
+            { "key": "A", "content": "192.168.10.128" },
+            { "key": "B", "content": "192.168.10.64" },
+            { "key": "C", "content": "192.168.10.192" },
+            { "key": "D", "content": "192.168.10.0" }
+          ],
+          "answer": "A",
+          "analysis": "掩码 255.255.255.192，块大小 64，130 落在 128~191 区间，网络地址为 192.168.10.128。",
+          "category": "cs_net",
+          "subCategory": "cs_net",
+          "type": "single"
+        }
+      ]
+    }
+  ]
+}

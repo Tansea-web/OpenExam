@@ -83,7 +83,8 @@ export default function ExamRoom({ paperId, questions: propQuestions, config, re
   const [timeLeft, setTimeLeft]         = useState(null);
   const [questions, setQuestions]       = useState([]);
   const [paper, setPaper]               = useState(null);
-  const [showAnalysis, setShowAnalysis] = useState(false);
+  // 按题记录解析展开状态：切题再回来不会把已看过的解析收起来
+  const [analysisShown, setAnalysisShown] = useState({});
   const [layoutMode, setLayoutMode]     = useState('split');
   const [sessionId, setSessionId]       = useState(() => resumeRecord?.id || `record_${Date.now()}`);
   const [sessionStartTime, setSessionStartTime] = useState(() => resumeRecord?.start_time || resumeRecord?.startTime || new Date().toISOString());
@@ -106,7 +107,7 @@ export default function ExamRoom({ paperId, questions: propQuestions, config, re
     setAnswers({});
     setTimeElapsed(0);
     setCurrentIndex(0);
-    setShowAnalysis(isMemorizeMode && !isMockMode);
+    setAnalysisShown({});
     if (propQuestions?.length > 0) {
       setQuestions(propQuestions);
       setPaper({ title: config?.title || `${CAT_NAMES[config?.category] || '专项'}练习`, type: 'practice', duration: durationMinutes });
@@ -128,6 +129,8 @@ export default function ExamRoom({ paperId, questions: propQuestions, config, re
   }, [isMockMode, durationMinutes, resumeRecord]);
 
   const currentQuestion = questions[currentIndex];
+  // 背题模式恒显示；其余模式按「这道题是否已经展开过解析」决定，切题不丢
+  const showAnalysis = !isMockMode && (isMemorizeMode || Boolean(currentQuestion && analysisShown[currentQuestion.id]));
 
   useEffect(() => {
     if (!currentQuestion) return;
@@ -254,6 +257,11 @@ export default function ExamRoom({ paperId, questions: propQuestions, config, re
 
   const handleSelect = async (key) => {
     if (!currentQuestion) return;
+    const isMultiple = currentQuestion.type === 'multiple';
+    // 非模考下单选/判断题答完即判定（解析同步展开），再点就不该改动答案；
+    // 多选需要多次点击才能选完，不锁定。
+    if (!isMockMode && !isMultiple && isAnswered(answers[currentQuestion.id], currentQuestion.type)) return;
+
     let nextAnswers = answers;
     setAnswers((prev) => {
       const next = { ...prev };
@@ -269,15 +277,17 @@ export default function ExamRoom({ paperId, questions: propQuestions, config, re
       nextAnswers = next;
       return next;
     });
-    if (!isMockMode) setShowAnalysis(true);
+    if (!isMockMode) {
+      setAnalysisShown((prev) => ({ ...prev, [currentQuestion.id]: true }));
+    }
     if (canPersist) {
       try { await persistProgress('ongoing', nextAnswers); } catch (err) { console.error('保存进度失败:', err); }
     }
   };
 
-  const goPrev = () => { if (currentIndex > 0) { setCurrentIndex(i => i - 1); setShowAnalysis(isMemorizeMode && !isMockMode); bodyRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); } };
-  const goNext = () => { if (currentIndex < questions.length - 1) { setCurrentIndex(i => i + 1); setShowAnalysis(isMemorizeMode && !isMockMode); bodyRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); } };
-  const goToQ  = i => { setCurrentIndex(i); setShowAnalysis(isMemorizeMode && !isMockMode); bodyRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); };
+  const goPrev = () => { if (currentIndex > 0) { setCurrentIndex(i => i - 1); bodyRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); } };
+  const goNext = () => { if (currentIndex < questions.length - 1) { setCurrentIndex(i => i + 1); bodyRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); } };
+  const goToQ  = i => { setCurrentIndex(i); bodyRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); };
 
   const doSubmit = async (forced = false) => {
     const { correctCount, answeredCount, wrongQuestions, reviewOutcomes } = collectResultStats();
@@ -436,7 +446,7 @@ export default function ExamRoom({ paperId, questions: propQuestions, config, re
     if (!isMemorizeMode && !(isAnswered(answers[currentQuestion.id], currentQuestion.type) && showAnalysis)) return null;
     const isRight = isCorrectAnswer(answers[currentQuestion.id], currentQuestion.answer, currentQuestion.type);
     return (
-      <div style={{ marginTop: 20, padding: '16px 18px', background: 'var(--accent-soft-bg)', borderRadius: 10, border: '1px solid var(--accent-border-soft)', animation: 'fadeIn 0.25s ease-out' }}>
+      <div style={{ marginTop: 20, padding: '16px 18px', background: 'var(--accent-soft-bg)', borderRadius: 10, border: '1px solid var(--accent-border-soft)', animation: 'fadeIn 0.25s ease-out', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
           {isAnswered(answers[currentQuestion.id], currentQuestion.type) ? (
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, padding: '3px 9px', borderRadius: 5, color: isRight ? 'var(--success)' : 'var(--danger)', background: isRight ? 'var(--success-soft)' : 'var(--danger-soft)' }}>
@@ -616,19 +626,22 @@ export default function ExamRoom({ paperId, questions: propQuestions, config, re
         </aside>
 
         {/* ── RIGHT: MAIN AREA ── */}
-        <div ref={bodyRef} style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+        <div ref={bodyRef} style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', position: 'relative', minHeight: 0 }}>
           <div style={{
             maxWidth: layoutMode === 'centered' ? 760 : layoutMode === 'full' ? 'none' : 'none',
             margin: layoutMode === 'centered' ? '0 auto' : '0',
-            padding: '28px 36px 100px',
+            padding: '28px 36px 36px',
             display: 'flex', flexDirection: 'column', gap: 0, flex: 1,
             width: '100%', boxSizing: 'border-box',
+            overflowY: 'auto', minHeight: 0,
           }}>
 
             {/* ── QUESTION CARD ── */}
             <div style={{
               background: 'var(--surface-soft)', borderRadius: 14, border: '1px solid var(--line)',
               overflow: 'hidden', marginBottom: 16,
+              // 内容列是 flex 容器，不加这条卡片会被压缩，材料下半段被 overflow 裁掉且滚不到
+              flexShrink: 0,
             }}>
               {/* Category ribbon */}
               <div style={{
@@ -678,7 +691,7 @@ export default function ExamRoom({ paperId, questions: propQuestions, config, re
             </div>
 
             {/* ── OPTIONS ── */}
-            <div style={{ marginBottom: 4 }}>
+            <div style={{ marginBottom: 4, flexShrink: 0 }}>
               <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.8px', marginBottom: 9 }}>
                 作答区域 {currentQuestion.type !== 'single' && <span style={{ color: catPalette.color }}>（可多选）</span>}
               </div>
@@ -690,56 +703,55 @@ export default function ExamRoom({ paperId, questions: propQuestions, config, re
 
           </div>
 
-          {/* ── BOTTOM NAV (sticky) ── */}
+          {/* ── BOTTOM NAV（固定在主区底部，内容区独立滚动） ── */}
           <div style={{
-            position: 'sticky', bottom: 0, left: 0, right: 0, height: 76,
-            background: 'linear-gradient(to top, var(--surface) 55%, transparent)',
+            flexShrink: 0, height: 54,
+            background: 'var(--surface)',
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12,
-            pointerEvents: 'none',
+            paddingBottom: 6,
           }}>
-            <button disabled={currentIndex === 0} onClick={goPrev} style={{
-              pointerEvents: 'auto', display: 'flex', alignItems: 'center', gap: 6,
-              padding: '9px 22px', borderRadius: 20, background: 'var(--surface)',
-              border: '1px solid var(--line)', color: currentIndex === 0 ? 'var(--muted)' : 'var(--text)',
-              fontSize: 13, fontWeight: 600, cursor: currentIndex === 0 ? 'not-allowed' : 'pointer',
-              boxShadow: '0 3px 10px rgba(0,0,0,0.06)', opacity: currentIndex === 0 ? 0.45 : 1,
-              transition: 'all 0.2s',
-            }}>
-              <Ico d={<><path d="M19 12H5M12 19l-7-7 7-7"/></>} size={14} sw={2} />
-              上一题
-            </button>
+          <button disabled={currentIndex === 0} onClick={goPrev} style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            padding: '9px 22px', borderRadius: 20, background: 'var(--surface)',
+            border: '1px solid var(--line)', color: currentIndex === 0 ? 'var(--muted)' : 'var(--text)',
+            fontSize: 13, fontWeight: 600, cursor: currentIndex === 0 ? 'not-allowed' : 'pointer',
+            boxShadow: '0 3px 10px rgba(0,0,0,0.06)', opacity: currentIndex === 0 ? 0.45 : 1,
+            transition: 'all 0.2s',
+          }}>
+            <Ico d={<><path d="M19 12H5M12 19l-7-7 7-7"/></>} size={14} sw={2} />
+            上一题
+          </button>
 
-            {/* Question counter pills */}
-            <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
-              {questions.slice(Math.max(0, currentIndex - 2), Math.min(questions.length, currentIndex + 3)).map((q, i) => {
-                const idx = Math.max(0, currentIndex - 2) + i;
-                const isCur = idx === currentIndex;
-                return (
-                  <button key={idx} onClick={() => goToQ(idx)} style={{
-                    pointerEvents: 'auto',
-                    width: isCur ? 28 : 22, height: 22, borderRadius: 11,
-                    border: isCur ? '2px solid var(--accent)' : '1px solid var(--line)',
-                    background: isCur ? 'var(--accent)' : isAnswered(answers[q.id], q.type) ? 'var(--accent-soft-bg)' : 'var(--surface)',
-                    color: isCur ? '#fff' : 'var(--muted)',
-                    fontSize: 10, fontWeight: 700, cursor: 'pointer', transition: 'all 0.15s',
-                  }}>
-                    {idx + 1}
-                  </button>
-                );
-              })}
-            </div>
+          {/* Question counter pills */}
+          <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
+            {questions.slice(Math.max(0, currentIndex - 2), Math.min(questions.length, currentIndex + 3)).map((q, i) => {
+              const idx = Math.max(0, currentIndex - 2) + i;
+              const isCur = idx === currentIndex;
+              return (
+                <button key={idx} onClick={() => goToQ(idx)} style={{
+                  width: isCur ? 28 : 22, height: 22, borderRadius: 11,
+                  border: isCur ? '2px solid var(--accent)' : '1px solid var(--line)',
+                  background: isCur ? 'var(--accent)' : isAnswered(answers[q.id], q.type) ? 'var(--accent-soft-bg)' : 'var(--surface)',
+                  color: isCur ? '#fff' : 'var(--muted)',
+                  fontSize: 10, fontWeight: 700, cursor: 'pointer', transition: 'all 0.15s',
+                }}>
+                  {idx + 1}
+                </button>
+              );
+            })}
+          </div>
 
-            <button disabled={currentIndex === questions.length - 1} onClick={goNext} style={{
-              pointerEvents: 'auto', display: 'flex', alignItems: 'center', gap: 6,
-              padding: '9px 22px', borderRadius: 20, background: 'var(--surface)',
-              border: '1px solid var(--line)', color: currentIndex === questions.length - 1 ? 'var(--muted)' : 'var(--text)',
-              fontSize: 13, fontWeight: 600, cursor: currentIndex === questions.length - 1 ? 'not-allowed' : 'pointer',
-              boxShadow: '0 3px 10px rgba(0,0,0,0.06)', opacity: currentIndex === questions.length - 1 ? 0.45 : 1,
-              transition: 'all 0.2s',
-            }}>
-              下一题
-              <Ico d={<><path d="M5 12h14M12 5l7 7-7 7"/></>} size={14} sw={2} />
-            </button>
+          <button disabled={currentIndex === questions.length - 1} onClick={goNext} style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            padding: '9px 22px', borderRadius: 20, background: 'var(--surface)',
+            border: '1px solid var(--line)', color: currentIndex === questions.length - 1 ? 'var(--muted)' : 'var(--text)',
+            fontSize: 13, fontWeight: 600, cursor: currentIndex === questions.length - 1 ? 'not-allowed' : 'pointer',
+            boxShadow: '0 3px 10px rgba(0,0,0,0.06)', opacity: currentIndex === questions.length - 1 ? 0.45 : 1,
+            transition: 'all 0.2s',
+          }}>
+            下一题
+            <Ico d={<><path d="M5 12h14M12 5l7 7-7 7"/></>} size={14} sw={2} />
+          </button>
           </div>
         </div>
       </div>
