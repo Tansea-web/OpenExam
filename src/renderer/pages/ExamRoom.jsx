@@ -86,6 +86,8 @@ export default function ExamRoom({ paperId, questions: propQuestions, config, re
   // 按题记录解析展开状态：切题再回来不会把已看过的解析收起来
   const [analysisShown, setAnalysisShown] = useState({});
   const [layoutMode, setLayoutMode]     = useState('split');
+  // 窄屏（≤768px）下左栏变为抽屉，这里控制抽屉开合；桌面端始终展开
+  const [cardOpen, setCardOpen]           = useState(false);
   const [sessionId, setSessionId]       = useState(() => resumeRecord?.id || `record_${Date.now()}`);
   const [sessionStartTime, setSessionStartTime] = useState(() => resumeRecord?.start_time || resumeRecord?.startTime || new Date().toISOString());
   const { confirm: showConfirm, alert: showAlert } = useDialog();
@@ -287,7 +289,7 @@ export default function ExamRoom({ paperId, questions: propQuestions, config, re
 
   const goPrev = () => { if (currentIndex > 0) { setCurrentIndex(i => i - 1); bodyRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); } };
   const goNext = () => { if (currentIndex < questions.length - 1) { setCurrentIndex(i => i + 1); bodyRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); } };
-  const goToQ  = i => { setCurrentIndex(i); bodyRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); };
+  const goToQ  = i => { setCurrentIndex(i); setCardOpen(false); bodyRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); };
 
   const doSubmit = async (forced = false) => {
     const { correctCount, answeredCount, wrongQuestions, reviewOutcomes } = collectResultStats();
@@ -471,10 +473,10 @@ export default function ExamRoom({ paperId, questions: propQuestions, config, re
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100%', background: 'var(--surface)', overflow: 'hidden' }}>
+    <div className="er-room" style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100%', background: 'var(--surface)', overflow: 'hidden' }}>
 
       {/* ═══ TOP BAR ═══ */}
-      <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px 0 80px', height: 52, borderBottom: '1px solid var(--line)', background: 'var(--surface)', flexShrink: 0, zIndex: 10, WebkitAppRegion: 'drag' }}>
+      <header className="er-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px 0 80px', height: 52, borderBottom: '1px solid var(--line)', background: 'var(--surface)', flexShrink: 0, zIndex: 10, WebkitAppRegion: 'drag' }}>
         {/* Exit */}
         <button onClick={handleExit} style={{ WebkitAppRegion: 'no-drag', display: 'flex', alignItems: 'center', gap: 5, background: 'transparent', border: '1px solid var(--line)', padding: '5px 13px', borderRadius: 16, fontSize: 12, fontWeight: 500, color: 'var(--text)', cursor: 'pointer', transition: 'all 0.2s' }}
           onMouseOver={e => e.currentTarget.style.background = 'var(--surface-soft)'}
@@ -484,12 +486,12 @@ export default function ExamRoom({ paperId, questions: propQuestions, config, re
         </button>
 
         {/* Title */}
-        <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', letterSpacing: '0.5px' }}>{paper?.title}</div>
+        <div className="er-title" style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', letterSpacing: '0.5px' }}>{paper?.title}</div>
 
         {/* Right controls */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, WebkitAppRegion: 'no-drag' }}>
           {/* Layout toggle */}
-          <div style={{ display: 'flex', background: 'var(--surface-soft)', borderRadius: 7, padding: 3, gap: 2 }}>
+          <div className="er-layout-toggle" style={{ display: 'flex', background: 'var(--surface-soft)', borderRadius: 7, padding: 3, gap: 2 }}>
             {[
               { key: 'centered', tip: '居中', icon: <><rect x="6" y="4" width="12" height="16" rx="2"/></> },
               { key: 'full',     tip: '展宽', icon: <><rect x="2" y="4" width="20" height="16" rx="2"/></> },
@@ -521,10 +523,13 @@ export default function ExamRoom({ paperId, questions: propQuestions, config, re
       </header>
 
       {/* ═══ BODY ═══ */}
-      <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
+      <div className="er-body" style={{ display: 'flex', flex: 1, minHeight: 0 }}>
+
+        {/* 窄屏抽屉遮罩（桌面端恒为 display:none） */}
+        <div className={`er-backdrop${cardOpen ? ' is-open' : ''}`} onClick={() => setCardOpen(false)} aria-hidden="true" />
 
         {/* ── LEFT SIDEBAR ── */}
-        <aside style={{ width: 230, background: 'var(--surface-soft)', borderRight: '1px solid var(--line)', display: 'flex', flexDirection: 'column', flexShrink: 0, overflow: 'hidden' }}>
+        <aside className={`er-aside${cardOpen ? ' is-open' : ''}`} style={{ width: 230, background: 'var(--surface-soft)', borderRight: '1px solid var(--line)', display: 'flex', flexDirection: 'column', flexShrink: 0, overflow: 'hidden' }}>
 
           {/* Progress header */}
           <div style={{ padding: '16px 16px 12px', borderBottom: '1px solid var(--line)' }}>
@@ -626,8 +631,8 @@ export default function ExamRoom({ paperId, questions: propQuestions, config, re
         </aside>
 
         {/* ── RIGHT: MAIN AREA ── */}
-        <div ref={bodyRef} style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', position: 'relative', minHeight: 0 }}>
-          <div style={{
+        <div className="er-main" ref={bodyRef} style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', position: 'relative', minHeight: 0 }}>
+          <div className="er-main-inner" style={{
             maxWidth: layoutMode === 'centered' ? 760 : layoutMode === 'full' ? 'none' : 'none',
             margin: layoutMode === 'centered' ? '0 auto' : '0',
             padding: '28px 36px 36px',
@@ -637,7 +642,7 @@ export default function ExamRoom({ paperId, questions: propQuestions, config, re
           }}>
 
             {/* ── QUESTION CARD ── */}
-            <div style={{
+            <div className="er-qcard" style={{
               background: 'var(--surface-soft)', borderRadius: 14, border: '1px solid var(--line)',
               overflow: 'hidden', marginBottom: 16,
               // 内容列是 flex 容器，不加这条卡片会被压缩，材料下半段被 overflow 裁掉且滚不到
@@ -703,14 +708,24 @@ export default function ExamRoom({ paperId, questions: propQuestions, config, re
 
           </div>
 
+          {/* 窄屏答题卡入口（桌面端恒为 display:none） */}
+          <button className="er-card-toggle" type="button" aria-label={`打开答题卡，已完成 ${answeredCount}/${questions.length}`} onClick={() => setCardOpen(true)}
+            style={{ display: 'none', position: 'absolute', right: 10, top: 12, zIndex: 20, alignItems: 'center', gap: 4,
+              padding: '6px 10px', borderRadius: 14, border: '1px solid var(--accent-border-soft)',
+              background: 'var(--surface)', color: 'var(--accent)', fontSize: 11, fontWeight: 700,
+              fontFamily: 'monospace', boxShadow: '0 6px 16px rgba(15,23,42,0.10)', cursor: 'pointer' }}>
+            <Ico d={<><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></>} size={12} sw={1.8} />
+            {answeredCount}/{questions.length}
+          </button>
+
           {/* ── BOTTOM NAV（固定在主区底部，内容区独立滚动） ── */}
-          <div style={{
+          <div className="er-nav" style={{
             flexShrink: 0, height: 54,
             background: 'var(--surface)',
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12,
             paddingBottom: 6,
           }}>
-          <button disabled={currentIndex === 0} onClick={goPrev} style={{
+          <button className="er-nav-btn" disabled={currentIndex === 0} onClick={goPrev} style={{
             display: 'flex', alignItems: 'center', gap: 6,
             padding: '9px 22px', borderRadius: 20, background: 'var(--surface)',
             border: '1px solid var(--line)', color: currentIndex === 0 ? 'var(--muted)' : 'var(--text)',
@@ -723,7 +738,7 @@ export default function ExamRoom({ paperId, questions: propQuestions, config, re
           </button>
 
           {/* Question counter pills */}
-          <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
+          <div className="er-pills" style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
             {questions.slice(Math.max(0, currentIndex - 2), Math.min(questions.length, currentIndex + 3)).map((q, i) => {
               const idx = Math.max(0, currentIndex - 2) + i;
               const isCur = idx === currentIndex;
@@ -741,7 +756,7 @@ export default function ExamRoom({ paperId, questions: propQuestions, config, re
             })}
           </div>
 
-          <button disabled={currentIndex === questions.length - 1} onClick={goNext} style={{
+          <button className="er-nav-btn" disabled={currentIndex === questions.length - 1} onClick={goNext} style={{
             display: 'flex', alignItems: 'center', gap: 6,
             padding: '9px 22px', borderRadius: 20, background: 'var(--surface)',
             border: '1px solid var(--line)', color: currentIndex === questions.length - 1 ? 'var(--muted)' : 'var(--text)',

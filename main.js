@@ -28,8 +28,8 @@ const createWindow = () => {
   const win = new BrowserWindow({
     width: 1200,
     height: 680,
-    minWidth: 1000,
-    minHeight: 580,
+    minWidth: 380,
+    minHeight: 600,
     backgroundColor: "#ffffff",
     show: false,
     icon: APP_ICON_PATH,

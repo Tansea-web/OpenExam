@@ -3,6 +3,10 @@ node_modules/
 
 # Build output
 dist/
+# PWA 构建产物与临时静态资源（含 10MB 种子库，构建时从 data/ 拷贝）
+dist-web/
+build/web-public/
+src/web/generated/
 
 # IDE
 .idea/
@@ -23,6 +27,9 @@ npm-debug.log*
 
 # 打包产物
 release/
+
+# AI 评测报告（每次运行都会变，不入库）
+eval/last-report.json
 
 # Environment
 .env

@@ -144,6 +144,8 @@ export default function AITeacher({ onBack }) {
   ]);
   const [sessions, setSessions] = useState([]);
   const [activeSessionId, setActiveSessionId] = useState("");
+  // 窄屏（≤768px）下左侧面板改为抽屉；桌面端始终展开
+  const [panelOpen, setPanelOpen] = useState(false);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [booting, setBooting] = useState(true);
@@ -621,7 +623,7 @@ export default function AITeacher({ onBack }) {
     <section className="main-panel" style={{ padding: 0, display: "flex", flexDirection: "column", overflow: "hidden", height: "100%", boxSizing: "border-box" }}>
 
       {/* ── HEADER ── */}
-      <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 22px 10px", borderBottom: "1px solid var(--line)", flexShrink: 0 }}>
+      <header className="ait-header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 22px 10px", borderBottom: "1px solid var(--line)", flexShrink: 0 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 11, color: "var(--muted)" }}>
             {onBack && (
@@ -651,24 +653,29 @@ export default function AITeacher({ onBack }) {
         </div>
 
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {/* 窄屏：会话与快捷指令抽屉入口 */}
+          <button className="ait-panel-toggle" type="button" aria-label="打开会话与快捷指令" onClick={() => setPanelOpen(true)}
+            style={{ display: "none", width: 30, height: 28, borderRadius: 7, border: "1px solid var(--line)", background: "var(--surface-soft)", color: "var(--muted)", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+            <Ico d={<><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></>} size={13} sw={2} />
+          </button>
           {/* Status pill */}
-          <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 11px", borderRadius: 16, background: configured ? "var(--success-soft)" : "var(--danger-soft)", border: `1px solid ${configured ? "var(--success-border)" : "var(--danger-border)"}` }}>
+          <div className="ait-status" style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 11px", borderRadius: 16, background: configured ? "var(--success-soft)" : "var(--danger-soft)", border: `1px solid ${configured ? "var(--success-border)" : "var(--danger-border)"}` }}>
             <span style={{ width: 5, height: 5, borderRadius: "50%", background: configured ? "var(--success)" : "var(--danger)", display: "inline-block" }} />
             <span style={{ fontSize: 11, fontWeight: 500, color: configured ? "var(--success)" : "var(--danger)" }}>{configured ? "已连接" : "未配置"}</span>
           </div>
           {/* Msg count badge */}
-          <div style={{ padding: "4px 11px", borderRadius: 16, background: "var(--accent-soft-bg)", border: "1px solid var(--accent-border-soft)", fontSize: 11, color: "var(--accent)", fontWeight: 500 }}>
+          <div className="ait-msgcount" style={{ padding: "4px 11px", borderRadius: 16, background: "var(--accent-soft-bg)", border: "1px solid var(--accent-border-soft)", fontSize: 11, color: "var(--accent)", fontWeight: 500 }}>
             {msgCount} 次问答
           </div>
           <button onClick={createNewSession} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--surface-soft)", color: "var(--text)", fontSize: 11, cursor: "pointer" }}>
             新建会话
           </button>
-          <button title="重命名当前会话" onClick={renameCurrentSession} disabled={!activeSessionId} style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid var(--line)", background: "transparent", color: !activeSessionId ? "var(--line)" : "var(--muted)", cursor: !activeSessionId ? "not-allowed" : "pointer", display: "grid", placeItems: "center", transition: "all 0.2s" }}
+          <button className="ait-icon-btn" title="重命名当前会话" onClick={renameCurrentSession} disabled={!activeSessionId} style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid var(--line)", background: "transparent", color: !activeSessionId ? "var(--line)" : "var(--muted)", cursor: !activeSessionId ? "not-allowed" : "pointer", display: "grid", placeItems: "center", transition: "all 0.2s" }}
             onMouseOver={e => { e.currentTarget.style.background = "var(--surface-soft)"; e.currentTarget.style.color = "var(--text)"; }}
             onMouseOut={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--muted)"; }}>
             <Ico d={ICONS.settings} size={12} sw={1.8} />
           </button>
-          <button title="删除当前会话" onClick={() => deleteSession(activeSessionId)} disabled={!activeSessionId} style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid var(--line)", background: "transparent", color: !activeSessionId ? "var(--line)" : "var(--muted)", cursor: !activeSessionId ? "not-allowed" : "pointer", display: "grid", placeItems: "center", transition: "all 0.2s" }}
+          <button className="ait-icon-btn" title="删除当前会话" onClick={() => deleteSession(activeSessionId)} disabled={!activeSessionId} style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid var(--line)", background: "transparent", color: !activeSessionId ? "var(--line)" : "var(--muted)", cursor: !activeSessionId ? "not-allowed" : "pointer", display: "grid", placeItems: "center", transition: "all 0.2s" }}
             onMouseOver={e => { e.currentTarget.style.background = "var(--surface-soft)"; e.currentTarget.style.color = "var(--text)"; }}
             onMouseOut={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--muted)"; }}>
             <Ico d={ICONS.trash} size={12} sw={1.8} />
@@ -677,16 +684,19 @@ export default function AITeacher({ onBack }) {
       </header>
 
       {/* ── BODY: left sidebar + right chat ── */}
-      <div style={{ flex: 1, display: "flex", overflow: "hidden", minHeight: 0 }}>
+      <div className="ait-body" style={{ flex: 1, display: "flex", overflow: "hidden", minHeight: 0, position: "relative" }}>
+
+        {/* 窄屏抽屉遮罩（桌面端恒为 display:none） */}
+        <div className={`ait-backdrop${panelOpen ? ' is-open' : ''}`} onClick={() => setPanelOpen(false)} aria-hidden="true" />
 
         {/* LEFT SIDEBAR */}
-        <aside style={{ width: 232, flexShrink: 0, borderRight: "1px solid var(--line)", display: "flex", flexDirection: "column", overflowY: "auto", overflowX: "hidden", minHeight: 0, paddingBottom: 10 }}>
+        <aside className={`ait-aside${panelOpen ? ' is-open' : ''}`} style={{ width: 232, flexShrink: 0, borderRight: "1px solid var(--line)", display: "flex", flexDirection: "column", overflowY: "auto", overflowX: "hidden", minHeight: 0, paddingBottom: 10 }}>
 
           <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--line)" }}>
             <div style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)", letterSpacing: "0.5px", marginBottom: 8 }}>会话列表</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 5, maxHeight: 136, overflowY: "auto" }}>
               {sessions.map((session) => (
-                <button key={session.id} onClick={() => setActiveSessionId(session.id)} style={{ padding: "7px 8px", borderRadius: 8, border: "1px solid var(--line)", background: session.id === activeSessionId ? "var(--accent-soft-bg)" : "var(--surface-soft)", color: session.id === activeSessionId ? "var(--accent)" : "var(--text)", textAlign: "left", cursor: "pointer", fontSize: 10, lineHeight: 1.5 }}>
+                <button key={session.id} onClick={() => { setActiveSessionId(session.id); setPanelOpen(false); }} style={{ padding: "7px 8px", borderRadius: 8, border: "1px solid var(--line)", background: session.id === activeSessionId ? "var(--accent-soft-bg)" : "var(--surface-soft)", color: session.id === activeSessionId ? "var(--accent)" : "var(--text)", textAlign: "left", cursor: "pointer", fontSize: 10, lineHeight: 1.5 }}>
                   <div style={{ fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{session.title || "新会话"}</div>
                   <div style={{ color: "var(--muted)" }}>{session.message_count || 0} 条消息</div>
                 </button>
@@ -819,7 +829,7 @@ export default function AITeacher({ onBack }) {
         </aside>
 
         {/* RIGHT: chat area */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <div className="ait-chat" style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
 
           {/* Messages */}
           <div

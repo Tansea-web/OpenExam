@@ -104,7 +104,10 @@ export default function AITraining({ source, onBack }) {
   };
 
   return (
-    <div className="page-view" style={{ padding: '0 4px' }}>
+    <div
+      className="page-view"
+      style={{ padding: '0 4px', height: '100%', minHeight: 0, overflowY: 'auto' }}
+    >
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
         {onBack && (
           <button

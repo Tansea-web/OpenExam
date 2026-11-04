@@ -528,9 +528,9 @@ export default function AIGenerate({ onOpenPaper, globalTrack = "", tracksConfig
         </div>
       </header>
 
-      <div style={{ display: "grid", gridTemplateColumns: "260px 1fr", gap: 32, flex: 1, minHeight: 0, paddingBottom: 20 }}>
+      <div className="aigen-body" style={{ display: "grid", gridTemplateColumns: "260px 1fr", gap: 32, flex: 1, minHeight: 0, paddingBottom: 20 }}>
         {/* Config Panel */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 20, paddingRight: 20, borderRight: "1px solid var(--line)" }}>
+        <div className="aigen-config" style={{ display: "flex", flexDirection: "column", gap: 20, paddingRight: 20, borderRight: "1px solid var(--line)" }}>
           <h3 style={{ fontSize: 13, fontWeight: 600 }}>出卷配置</h3>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -829,7 +829,7 @@ export default function AIGenerate({ onOpenPaper, globalTrack = "", tracksConfig
         </div>
 
         {/* Preview Panel */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 16, overflow: "hidden" }}>
+        <div className="aigen-preview" style={{ display: "flex", flexDirection: "column", gap: 16, overflow: "hidden" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
             <h3 style={{ fontSize: 13, fontWeight: 600 }}>生成预览</h3>
             <button

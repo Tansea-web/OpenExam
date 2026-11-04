@@ -86,13 +86,16 @@ export default function WrongBook({ onRedo, onAskAI, onVariant, subject = "", tr
 
   const updateCause = async (item, cause) => {
     setBusyId(`${item.id}:cause`);
+    setError('');
     try {
-      const updated = await window.openexam.db.setWrongQuestionCause(item.question_id, cause);
-      setList((prev) => prev.map((row) => (row.id === updated.id ? { ...row, cause: updated.cause } : row)));
+      await window.openexam.db.setWrongQuestionCause(item.question_id, cause);
+      // 直接用传入值更新本地，不依赖后端返回的行（返回结构可能不含 cause）
+      setList((prev) => prev.map((row) => (row.id === item.id ? { ...row, cause: cause || '' } : row)));
     } catch (e) {
       setError(e.message || '错因保存失败');
+    } finally {
+      setBusyId('');
     }
-    setBusyId('');
   };
 
   // AI 归因：让模型判断五类错因并回填

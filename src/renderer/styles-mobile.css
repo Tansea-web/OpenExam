@@ -1,0 +1,796 @@
+/* =========================================================================
+   移动端 / 窄屏适配（M2）
+   仅在 ≤768px 生效；桌面布局完全不受影响。
+   加载顺序在 styles.css 之后，用媒体查询覆盖桌面规则。
+   ========================================================================= */
+
+@media (max-width: 1024px) {
+  /* 平板：右侧边栏收窄，避免内容区被挤扁 */
+  .workspace-body {
+    grid-template-columns: minmax(0, 1fr) 240px;
+    padding: 8px 12px;
+  }
+}
+
+/* 中等宽度（平板横屏 / 小窗）：顶栏允许换行，避免 Tab 被压成竖排单字 */
+@media (max-width: 1180px) and (min-width: 769px) {
+  .workspace-header {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  .tabs {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 768px) {
+  /* ── 整体骨架：侧栏移到底部，变成横向 Tab 栏 ── */
+  .frame {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) 58px;
+    grid-template-areas:
+      "header"
+      "body"
+      "rail";
+  }
+
+  .rail {
+    flex-direction: row;
+    justify-content: space-around;
+    align-items: center;
+    gap: 0;
+    padding: 0;
+    border-right: none;
+    border-top: 1px solid var(--line);
+    overflow: visible;
+  }
+
+  /* 折叠按钮、分隔线、底部设置组在手机上隐藏（底部栏空间有限） */
+  .rail-menu,
+  .rail-slider,
+  .rail-bottom,
+  .rail-icon.notes,
+  .rail-chat {
+    display: none !important;
+  }
+
+  /* 图标容器本身也要横向，否则 6 个图标仍在内部竖排、撑破底部栏 */
+  .rail-icons {
+    flex-direction: row;
+    width: 100%;
+    justify-content: space-around;
+    gap: 0;
+  }
+
+  .rail-icon {
+    width: 56px;
+    height: 52px;
+    margin: 0;
+    border-radius: 12px;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .rail-icon-text {
+    display: none !important;
+  }
+
+  /* 触屏没有 hover，tooltip 一律不显示，避免残影 */
+  .rail-icon::before,
+  .rail-icon:hover::before {
+    display: none !important;
+  }
+
+  /* ── 顶栏：两行 —— 第一行 logo + 操作，第二行页面 Tab 全部铺开 ── */
+  .workspace-header {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+  }
+
+  /* 让 brand 与 tabs 脱离 wrapper，直接参与 header 的换行布局 */
+  .workspace-header-main {
+    display: contents;
+  }
+
+  .app-brand {
+    order: 1;
+    padding: 4px;
+    border: none;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .app-brand-copy {
+    display: none;
+  }
+
+  .header-actions {
+    order: 2;
+    margin-left: auto;
+    gap: 8px;
+  }
+
+  .header-track,
+  .search,
+  .header-divider {
+    display: none !important;
+  }
+
+  /* 6 个页面 Tab 独占一行，换行兜底，绝不藏在滚动条后面 */
+  .tabs {
+    order: 3;
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0 10px;
+    padding: 6px 10px;
+    overflow: visible;
+  }
+
+  .tab {
+    flex: 0 0 auto;
+    font-size: 13px;
+    padding: 7px 0;
+    white-space: nowrap;
+  }
+
+  /* ── 内容区：单列堆叠 ── */
+  .workspace-body {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 8px 10px;
+    gap: 8px;
+  }
+
+  /* 首页右侧栏隐藏后，page-view 仍留着 300px 空列，这里收成单列 */
+  .workspace-body > .page-view {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .side-panel.home-side {
+    display: none;
+  }
+
+  /* ── 触控目标 ≥44px ── */
+  .summary-btn,
+  .practice-module-header,
+  .sub-item-btn {
+    min-height: 44px;
+  }
+
+  /* ── 答题页：选项全宽、字号略放大 ── */
+  .exam-option-row,
+  .option-item {
+    min-height: 48px;
+  }
+
+  /* ── 首页：双列卡片改单列，留白收紧 ── */
+  .home-main {
+    padding: 0 12px 16px;
+  }
+
+  .home-bottom-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .home-main-title-row {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .home-dist-body {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  /* ── 通用：长文本换行，禁止横向溢出 ── */
+  .page-view {
+    overflow-x: hidden;
+  }
+
+  .rich-question-content {
+    word-break: break-word;
+  }
+}
+
+/* =========================================================================
+   答题页（ExamRoom）：桌面端双栏 → 窄屏单栏 + 答题卡抽屉
+   ========================================================================= */
+
+/* 桌面端：抽屉相关元素一律不出现 */
+.er-backdrop,
+.er-card-toggle {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  /* 顶栏：去掉窗控留白，控件收紧 */
+  .er-header {
+    padding: 0 12px !important;
+    gap: 8px;
+  }
+
+  /* 布局模式（居中/展宽/分屏）在窄屏无意义 */
+  .er-layout-toggle {
+    display: none !important;
+  }
+
+  .er-header .er-title {
+    flex: 1;
+    min-width: 0;
+    font-size: 12px !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: center;
+  }
+
+  /* 主体：主区占满，左栏改为覆盖式抽屉 */
+  .er-body {
+    position: relative;
+  }
+
+  .er-aside {
+    position: fixed !important;
+    top: 52px;
+    left: 0;
+    bottom: 0;
+    width: min(86vw, 320px) !important;
+    z-index: 60;
+    transform: translateX(-100%);
+    transition: transform 0.24s ease;
+    box-shadow: 0 12px 40px rgba(15, 23, 42, 0.18);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .er-aside.is-open {
+    transform: translateX(0);
+  }
+
+  .er-backdrop.is-open {
+    display: block;
+    position: fixed;
+    top: 52px;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    background: rgba(15, 23, 42, 0.32);
+    z-index: 55;
+  }
+
+  /* 答题卡入口：浮在底部导航上方 */
+  .er-card-toggle {
+    display: inline-flex !important;
+    position: fixed !important;
+    right: 10px;
+    bottom: calc(62px + env(safe-area-inset-bottom));
+    top: auto !important;
+    min-height: 36px;
+  }
+
+  /* 内容区留白压缩，底部留出答题卡入口的空间 */
+  .er-main-inner {
+    padding: 14px 12px 76px !important;
+  }
+
+  /* 题头信息较多，允许换行 */
+  .er-qcard > div:first-child {
+    flex-wrap: wrap;
+    padding: 8px 14px !important;
+    row-gap: 6px;
+  }
+
+  .er-qcard .exam-material-block {
+    margin: 0 12px 12px !important;
+  }
+
+  /* 底部导航：按钮瘦身，保证 390px 不溢出 */
+  .er-nav {
+    gap: 8px !important;
+    padding: 0 8px calc(6px + env(safe-area-inset-bottom)) !important;
+    height: auto !important;
+    min-height: 54px;
+  }
+
+  .er-nav-btn {
+    padding: 9px 14px !important;
+    flex: 0 0 auto;
+  }
+
+  .er-pills {
+    gap: 4px !important;
+  }
+}
+
+@media (max-width: 420px) {
+  /* 极端窄屏：标题让位给操作按钮 */
+  .er-header .er-title {
+    display: none;
+  }
+
+  .er-nav-btn {
+    padding: 9px 12px !important;
+  }
+}
+
+/* =========================================================================
+   题库页（PracticeModule）：统计块换行，分类项改两行布局
+   ========================================================================= */
+@media (max-width: 768px) {
+  .practice-page {
+    padding: 12px 10px;
+  }
+
+  .practice-summary {
+    flex-wrap: wrap;
+    gap: 14px 16px;
+    padding: 14px 16px;
+    margin-bottom: 18px;
+    border-radius: 14px;
+  }
+
+  .summary-item {
+    flex: 1 1 40%;
+    min-width: 0;
+  }
+
+  .summary-divider {
+    display: none;
+  }
+
+  .summary-value {
+    font-size: 18px;
+  }
+
+  .summary-actions {
+    margin-left: 0;
+    flex: 1 0 100%;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .summary-btn {
+    flex: 1 1 auto;
+    justify-content: center;
+    min-height: 40px;
+  }
+
+  .practice-item-main {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 64px;
+    padding: 12px 14px;
+    gap: 10px 12px;
+  }
+
+  .practice-info {
+    flex: 1 1 auto;
+    order: 1;
+    min-width: 0;
+  }
+
+  .practice-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .practice-meta {
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+
+  .practice-start-btn {
+    order: 3;
+    min-height: 34px;
+    padding: 6px 12px;
+  }
+
+  .practice-arrow {
+    order: 4;
+  }
+
+  /* 进度条整行放到第二行 */
+  .practice-progress {
+    order: 5;
+    flex: 1 0 100%;
+  }
+
+  .progress-bar-mini {
+    flex: 1;
+    width: auto;
+  }
+
+  .practice-subs {
+    padding: 0 14px 14px;
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* =========================================================================
+   设置页：左侧纵向导航 → 顶部横向 Tab，内容单列
+   ========================================================================= */
+@media (max-width: 768px) {
+  .main-panel.module-page {
+    padding: 0 12px !important;
+  }
+
+  .st-layout {
+    grid-template-columns: minmax(0, 1fr) !important;
+    /* 内容区较矮时不要把导航行撑满整屏 */
+    align-content: start;
+    align-items: start;
+    gap: 14px !important;
+  }
+
+  .st-nav {
+    flex-direction: row !important;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    align-items: flex-start;
+    gap: 8px !important;
+    padding-right: 0 !important;
+    padding-bottom: 10px;
+    border-right: none !important;
+    border-bottom: 1px solid var(--line);
+    overflow: visible;
+  }
+
+  .st-nav > button {
+    flex: 0 0 auto;
+    height: 40px;
+    min-height: 40px;
+    white-space: nowrap;
+    padding: 0 14px !important;
+  }
+
+  .st-content {
+    padding-right: 0 !important;
+    gap: 18px !important;
+  }
+
+  .st-2col,
+  .st-3col,
+  .st-split {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+/* =========================================================================
+   分析报告页：统计卡片 2 列，右侧栏下移为单列
+   ========================================================================= */
+@media (max-width: 768px) {
+  .an-header {
+    padding: 10px 12px !important;
+    gap: 8px;
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+
+  .an-body {
+    padding: 14px 12px 18px !important;
+    gap: 16px !important;
+  }
+
+  .an-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .an-row2 {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+/* =========================================================================
+   顶栏浮层：通知面板 / 用户菜单 改为贴着 header 下方的全宽面板，
+   避免 320px 的弹层从铃铛处向左伸出屏幕外
+   ========================================================================= */
+@media (max-width: 768px) {
+  .workspace-header {
+    position: relative;
+  }
+
+  .home-notify,
+  .user-menu-host {
+    position: static;
+  }
+
+  .home-notify-panel,
+  .user-menu {
+    top: calc(100% + 6px);
+    left: 10px;
+    right: 10px;
+    width: auto;
+    max-width: none;
+    max-height: 60vh;
+    overflow-y: auto;
+    z-index: 90;
+  }
+
+  /* 半透明面板在窄屏上会和正文叠字，改成实底 */
+  .home-notify-panel,
+  .user-menu {
+    background: var(--surface-elevated);
+    backdrop-filter: none;
+  }
+
+  .home-notify-panel {
+    max-height: 60vh;
+  }
+}
+
+/* =========================================================================
+   我的成长：左侧 210px 栏 + 1.3fr/1fr 双列 → 全部上下堆叠
+   ========================================================================= */
+@media (max-width: 768px) {
+  .growth-body {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .growth-aside {
+    width: 100% !important;
+    flex-shrink: 0;
+    border-right: none !important;
+    border-bottom: 1px solid var(--line);
+    overflow: visible !important;
+    padding: 14px 12px 16px !important;
+  }
+
+  .growth-main {
+    overflow: visible !important;
+    padding: 14px 12px 18px !important;
+  }
+
+  .growth-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 18px !important;
+  }
+}
+
+/* =========================================================================
+   模拟考试（试卷列表）：筛选栏换行、卡片操作按钮下移
+   ========================================================================= */
+@media (max-width: 768px) {
+  .paper-list-page {
+    padding: 12px 10px;
+  }
+
+  .province-filter {
+    margin-bottom: 14px;
+    padding-bottom: 12px;
+  }
+
+  .province-tag {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+
+  .filter-bar {
+    flex-wrap: wrap;
+    gap: 8px 10px;
+    margin-bottom: 16px;
+  }
+
+  .filter-left {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .filter-left .custom-select {
+    flex: 1 1 120px;
+    min-width: 0;
+  }
+
+  .filter-left .oe-select {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .filter-left input[type="text"] {
+    flex: 1 1 100%;
+    width: auto !important;
+  }
+
+  .filter-right {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .paper-card {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto auto;
+    gap: 8px;
+    padding: 16px 0;
+  }
+
+  .paper-title,
+  .paper-meta {
+    grid-column: 1;
+  }
+
+  .paper-meta {
+    flex-wrap: wrap;
+    gap: 8px 12px;
+  }
+
+  .paper-actions {
+    grid-column: 1;
+    grid-row: 4;
+    justify-self: stretch;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 4px;
+  }
+
+  .paper-actions .paper-action-btn {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 38px;
+    padding: 0 10px;
+  }
+
+  .paper-actions .paper-start-btn {
+    flex: 2 1 110px;
+  }
+}
+
+/* =========================================================================
+   AI 出卷：260px 配置 + 预览 改上下堆叠
+   ========================================================================= */
+@media (max-width: 768px) {
+  .main-panel.module-page {
+    padding: 0 12px !important;
+  }
+
+  .aigen-body {
+    display: flex !important;
+    flex-direction: column;
+    gap: 16px !important;
+  }
+
+  .aigen-config {
+    padding-right: 0 !important;
+    padding-bottom: 16px;
+    border-right: none !important;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .aigen-preview {
+    width: 100%;
+    min-height: 240px;
+  }
+}
+
+/* =========================================================================
+   练习历史 / 导入试卷：统计卡竖排、导入方式单列
+   ========================================================================= */
+@media (max-width: 768px) {
+  .history-page,
+  .import-page {
+    padding: 12px 10px;
+  }
+
+  .hs-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 12px;
+  }
+
+  .hs-value {
+    font-size: 16px;
+  }
+
+  .hs-label {
+    font-size: 10px;
+    white-space: nowrap;
+  }
+
+  .import-mode-select h3 {
+    font-size: 16px;
+    margin-bottom: 16px;
+  }
+
+  .mode-cards {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .mode-card {
+    width: auto;
+    padding: 20px 16px;
+  }
+}
+
+/* =========================================================================
+   AI 老师：左侧会话面板 → 窄屏抽屉，聊天区占满
+   ========================================================================= */
+.ait-backdrop,
+.ait-panel-toggle {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .ait-header {
+    padding: 10px 12px !important;
+    gap: 8px;
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  .ait-panel-toggle {
+    display: inline-flex !important;
+  }
+
+  /* 窄屏优先保证输入与对话区，头部信息做减法 */
+  .ait-status,
+  .ait-msgcount,
+  .ait-icon-btn {
+    display: none !important;
+  }
+
+  .ait-aside {
+    position: fixed !important;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: min(86vw, 320px) !important;
+    z-index: 60;
+    background: var(--surface);
+    transform: translateX(-100%);
+    transition: transform 0.24s ease;
+    box-shadow: 0 12px 40px rgba(15, 23, 42, 0.18);
+  }
+
+  .ait-aside.is-open {
+    transform: translateX(0);
+  }
+
+  .ait-backdrop.is-open {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.32);
+    z-index: 55;
+  }
+
+  .ait-chat {
+    width: 100%;
+  }
+}
+
+/* =========================================================================
+   交卷结果页：操作按钮两列排布，避免文字被压成竖排
+   ========================================================================= */
+@media (max-width: 768px) {
+  .result-actions-bar {
+    flex-wrap: wrap;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .result-actions-bar .action-btn-outline,
+  .result-actions-bar .action-btn-solid {
+    flex: 1 1 calc(50% - 4px);
+    height: auto;
+    min-height: 38px;
+    padding: 0 10px;
+    justify-content: center;
+    white-space: nowrap;
+  }
+}
+
+/* 触屏设备统一去掉依赖 hover 的位移效果，避免点击后卡在半动画 */
+@media (hover: none) {
+  .rail-icon:hover,
+  .summary-btn:hover,
+  .tab:hover {
+    transform: none;
+  }
+}

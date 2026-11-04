@@ -6,6 +6,9 @@
   "scripts": {
     "dev": "concurrently -k \"vite\" \"wait-on http://127.0.0.1:5189 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5189 electron .\"",
     "build": "vite build",
+    "build:web": "node scripts/prepare-web-app.js && node scripts/build-web-database.js && vite build --config vite.config.web.js",
+    "dev:web": "node scripts/prepare-web-app.js && node scripts/build-web-database.js && vite --config vite.config.web.js",
+    "preview:web": "vite preview --config vite.config.web.js --host 0.0.0.0 --port 4173",
     "preview": "vite preview",
     "start": "electron .",
     "pack": "npm run build && electron-builder --dir",
@@ -30,7 +33,8 @@
     "better-sqlite3": "^12.6.2",
     "electron-updater": "^6.8.3",
     "katex": "^0.16.11",
-    "openai": "^6.17.0"
+    "openai": "^6.17.0",
+    "sql.js": "^1.13.0"
   },
   "devDependencies": {
     "@babel/core": "^7.29.7",

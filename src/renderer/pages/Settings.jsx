@@ -529,9 +529,9 @@ export default function Settings({ onBack, onTracksConfigChange, initialSection 
         </div>
       </header>
 
-      <div style={{ display: "grid", gridTemplateColumns: "180px 1fr", gap: 32, flex: 1, minHeight: 0, paddingBottom: 20 }}>
+      <div className="st-layout" style={{ display: "grid", gridTemplateColumns: "180px 1fr", gap: 32, flex: 1, minHeight: 0, paddingBottom: 20 }}>
         {/* Navigation */}
-        <nav style={{ display: "flex", flexDirection: "column", gap: 6, paddingRight: 20, borderRight: "1px solid var(--line)" }}>
+        <nav className="st-nav" style={{ display: "flex", flexDirection: "column", gap: 6, paddingRight: 20, borderRight: "1px solid var(--line)" }}>
           {navItems.map(item => (
             <button key={item.id} onClick={() => setActiveSection(item.id)}
               style={{
@@ -548,7 +548,7 @@ export default function Settings({ onBack, onTracksConfigChange, initialSection 
         </nav>
 
         {/* Content Area */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 24, overflow: "auto", paddingRight: 8 }}>
+        <div className="st-content" style={{ display: "flex", flexDirection: "column", gap: 24, overflow: "auto", paddingRight: 8 }}>
           {activeSection === 'tracks' && (
             <TrackManager onChange={onTracksConfigChange} />
           )}
@@ -644,7 +644,7 @@ export default function Settings({ onBack, onTracksConfigChange, initialSection 
                     </button>
                   </div>
 
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}>
+                  <div className="st-2col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}>
                     <div style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", background: "var(--surface)" }}>
                       <div style={{ fontSize: 10, color: "var(--muted)", marginBottom: 4 }}>配置存储</div>
                       <div style={{ fontSize: 12, fontWeight: 600, color: persistStatus === 'sqlite' ? 'var(--success)' : 'var(--text)' }}>
@@ -671,7 +671,7 @@ export default function Settings({ onBack, onTracksConfigChange, initialSection 
                       <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.7 }}>引擎 A 复用当前 AI 模型；引擎 B 用独立 OCR 服务，适合扫描 PDF 或复杂版式。</div>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+                    <div className="st-3col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
                       {[
                         ['auto', '自动选择'],
                         ['ai', '仅 AI 引擎'],
@@ -712,7 +712,7 @@ export default function Settings({ onBack, onTracksConfigChange, initialSection 
                         </label>
                       </div>
 
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                      <div className="st-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                           <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text)' }}>OCR URL</label>
                           <input type="text" value={settings.ocrApiUrl} onChange={(e) => setSettings(prev => ({ ...prev, ocrApiUrl: e.target.value }))} placeholder="https://your-ocr.example.com/recognize"
@@ -854,7 +854,7 @@ export default function Settings({ onBack, onTracksConfigChange, initialSection 
                 </div>
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1.1fr 0.9fr", gap: 16 }}>
+              <div className="st-split" style={{ display: "grid", gridTemplateColumns: "1.1fr 0.9fr", gap: 16 }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 14, padding: "20px 22px", borderRadius: 18, background: "var(--surface-soft)", border: "1px solid var(--line)" }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
                     <div>
@@ -863,7 +863,7 @@ export default function Settings({ onBack, onTracksConfigChange, initialSection 
                     </div>
                     <button type="button" onClick={handleUpdatePrimary} disabled={checkingUpdate || updateState?.status === 'checking'} style={{ minWidth: 108, height: 38, borderRadius: 12, border: "none", background: "var(--accent)", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", opacity: checkingUpdate || updateState?.status === 'checking' ? 0.7 : 1 }}>{updatePrimaryLabel}</button>
                   </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
+                  <div className="st-2col" style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
                     <div style={{ padding: "12px 14px", borderRadius: 14, background: "var(--surface)", border: "1px solid var(--line)" }}>
                       <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 6 }}>当前版本</div>
                       <strong style={{ fontSize: 16 }}>{appInfo?.version ? `v${appInfo.version}` : '-'}</strong>

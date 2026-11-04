@@ -274,7 +274,7 @@ export default function Analytics({ onOpenSettings, onStartRecommend, onStartPra
       overflow: "hidden", height: "100%", boxSizing: "border-box",
     }}>
       {/* ── Page Header ── */}
-      <header style={{
+      <header className="an-header" style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "14px 24px 12px 22px", borderBottom: "1px solid var(--line)", flexShrink: 0,
       }}>
@@ -312,10 +312,10 @@ export default function Analytics({ onOpenSettings, onStartRecommend, onStartPra
       </header>
 
       {/* ── Body ── */}
-      <div style={{ flex: 1, overflow: "auto", padding: "20px 24px 24px 22px", display: "flex", flexDirection: "column", gap: 20 }}>
+      <div className="an-body" style={{ flex: 1, overflow: "auto", padding: "20px 24px 24px 22px", display: "flex", flexDirection: "column", gap: 20 }}>
 
         {/* Row 1 — 4 summary stat cards */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+        <div className="an-stats" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
           {summaryCards.map(c => (
             <StatCard key={c.label} {...c} />
           ))}
@@ -381,7 +381,7 @@ export default function Analytics({ onOpenSettings, onStartRecommend, onStartPra
         )}
 
         {/* Row 2 — two-column layout */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: 20, flex: 1, minHeight: 0 }}>
+        <div className="an-row2" style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: 20, flex: 1, minHeight: 0 }}>
 
           {/* LEFT: category mastery */}
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>

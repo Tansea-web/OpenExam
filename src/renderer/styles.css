@@ -248,7 +248,8 @@ button {
   border-right: 1px solid var(--line);
   position: relative;
   min-height: 0;
-  overflow: hidden;
+  /* 不能是 hidden：会裁掉伸出侧栏的 ::before tooltip（只剩侧栏内一小段竖条） */
+  overflow: visible;
   /* 悬浮提示（::before）伸出侧栏绘制在右侧工作区之上，需要把侧栏整体提到更高层级，
      否则会被 DOM 顺序在后的 workspace 内容遮住（tooltip 自身的 z-index 只在本上下文内生效） */
   z-index: 60;
@@ -535,6 +536,9 @@ button {
 .tabs {
   display: flex;
   gap: 32px;
+  padding: 2px 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
   -webkit-app-region: no-drag;
 }
 
@@ -545,6 +549,7 @@ button {
   font-size: 14px;
   font-weight: 500;
   padding: 8px 0;
+  white-space: nowrap;
   cursor: pointer;
   position: relative;
   transition: color 0.2s ease;

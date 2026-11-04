@@ -1,0 +1,9 @@
+[26556:1104/164736.185:ERROR:cache_util_win.cc(20)] Unable to move the cache: 拒绝访问。 (0x5)
+[26556:1104/164736.185:ERROR:cache_util_win.cc(20)] Unable to move the cache: 拒绝访问。 (0x5)
+[26556:1104/164736.185:ERROR:cache_util_win.cc(20)] Unable to move the cache: 拒绝访问。 (0x5)
+[26556:1104/164736.188:ERROR:disk_cache.cc(208)] Unable to create cache
+[26556:1104/164736.188:ERROR:gpu_disk_cache.cc(711)] Gpu Cache Creation failed: -2
+[26556:1104/164736.188:ERROR:disk_cache.cc(208)] Unable to create cache
+[26556:1104/164736.188:ERROR:gpu_disk_cache.cc(711)] Gpu Cache Creation failed: -2
+[26556:1104/164736.189:ERROR:disk_cache.cc(208)] Unable to create cache
+[26556:1104/164736.189:ERROR:gpu_disk_cache.cc(711)] Gpu Cache Creation failed: -2

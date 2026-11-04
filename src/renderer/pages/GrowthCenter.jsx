@@ -166,10 +166,10 @@ export default function GrowthCenter({ onOpenAchievements, onStartPractice }) {
       </header>
 
       {/* ── BODY: left sidebar + right panels ── */}
-      <div style={{ flex: 1, overflow: "hidden", display: "flex", minHeight: 0 }}>
+      <div className="growth-body" style={{ flex: 1, overflow: "hidden", display: "flex", minHeight: 0 }}>
 
         {/* LEFT SIDEBAR — Level, XP, daily stats */}
-        <aside style={{ width: 210, flexShrink: 0, borderRight: "1px solid var(--line)", overflow: "auto", padding: "16px 16px 20px" }}>
+        <aside className="growth-aside" style={{ width: 210, flexShrink: 0, borderRight: "1px solid var(--line)", overflow: "auto", padding: "16px 16px 20px" }}>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "0 0 16px", borderBottom: "1px solid var(--line)", marginBottom: 16 }}>
             <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
@@ -274,8 +274,8 @@ export default function GrowthCenter({ onOpenAchievements, onStartPractice }) {
         </aside>
 
         {/* RIGHT: heatmap + achievements + goals */}
-        <div style={{ flex: 1, overflow: "auto", padding: "16px 22px 22px" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 22 }}>
+        <div className="growth-main" style={{ flex: 1, overflow: "auto", padding: "16px 22px 22px" }}>
+          <div className="growth-grid" style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 22 }}>
 
             {/* col 1 — heatmap + stage goals */}
             <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>

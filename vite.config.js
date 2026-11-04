@@ -5,6 +5,10 @@ const path = require("path");
 module.exports = defineConfig({
   base: "./",
   plugins: [react()],
+  define: {
+    // 桌面端：不需要加载 PWA 的 sql.js 数据桥
+    __OPENEXAM_WEB__: "false"
+  },
   root: path.resolve(__dirname, "src/renderer"),
   build: {
     outDir: path.resolve(__dirname, "dist"),
