@@ -37,9 +37,19 @@ async function bootstrap() {
   renderApp();
 
   if (__OPENEXAM_WEB__ && "serviceWorker" in navigator) {
+    // 只有「已有旧 SW 控制本页」时，新 SW 接管后才刷新，避免首次访问多刷一次
+    const hadController = Boolean(navigator.serviceWorker.controller);
+    let reloading = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (!hadController || reloading) return;
+      reloading = true;
+      window.location.reload();
+    });
+
     window.addEventListener("load", () => {
       navigator.serviceWorker
-        .register(new URL("sw.js", document.baseURI).href, { scope: "./" })
+        .register(new URL("sw.js", document.baseURI).href, { scope: "./", updateViaCache: "none" })
+        .then((registration) => registration.update())
         .catch((error) => console.warn("[pwa] Service Worker 注册失败", error));
     });
   }

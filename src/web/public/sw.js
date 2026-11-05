@@ -2,14 +2,14 @@
  * OpenExam PWA Service Worker
  *
  * 策略：
- *   - 同源 GET 请求 cache-first，命中即返回；
- *   - 未命中时走网络并回填缓存（含 10MB 题库种子，首次加载后离线可用）；
- *   - 导航请求失败时回退 index.html，保证离线能启动。
- * 发版时改动 VERSION 即可让旧缓存整体失效。
+ *   - 导航请求（index.html）network-first：每次发版刷新即可拿到新页面，离线回退缓存；
+ *   - 静态资源 cache-first：文件名带 hash，命中即返回，未命中回源并回填；
+ *   - 发版时改动 VERSION 可强制清空全部旧缓存。
  */
-const VERSION = 'v2';
+const VERSION = 'v3';
 const CACHE = `openexam-${VERSION}`;
 const PRECACHE = ['./', './index.html', './manifest.webmanifest'];
+const NAV_TIMEOUT = 4000;
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -28,6 +28,13 @@ self.addEventListener('activate', (event) => {
   })());
 });
 
+function withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms)),
+  ]);
+}
+
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   if (request.method !== 'GET') return;
@@ -37,6 +44,19 @@ self.addEventListener('fetch', (event) => {
 
   event.respondWith((async () => {
     const cache = await caches.open(CACHE);
+
+    if (request.mode === 'navigate') {
+      try {
+        const fresh = await withTimeout(fetch(request), NAV_TIMEOUT);
+        if (fresh && fresh.ok) cache.put('./index.html', fresh.clone());
+        return fresh;
+      } catch (error) {
+        const cached = (await cache.match(request)) || (await cache.match('./index.html'));
+        if (cached) return cached;
+        throw error;
+      }
+    }
+
     const cached = await cache.match(request);
     if (cached) return cached;
 
@@ -45,10 +65,6 @@ self.addEventListener('fetch', (event) => {
       if (response && response.ok) cache.put(request, response.clone());
       return response;
     } catch (error) {
-      if (request.mode === 'navigate') {
-        const fallback = await cache.match('./index.html');
-        if (fallback) return fallback;
-      }
       throw error;
     }
   })());
