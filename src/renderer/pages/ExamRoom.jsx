@@ -242,7 +242,7 @@ export default function ExamRoom({ paperId, questions: propQuestions, config, re
     return { correctCount, answeredCount, objectiveCount, wrongQuestions, reviewOutcomes };
   };
 
-  const persistProgress = async (status, answerMap = answers, elapsed = timeElapsed) => {
+  const persistProgress = async (status, answerMap = answers, elapsed = timeElapsed, extraMeta = {}) => {
     if (!window.openexam?.db?.savePracticeRecord || !canPersist) return;
     const { correctCount, objectiveCount } = collectResultStats(answerMap);
     // 正确率只统计客观题，主观题由评分单独记录
@@ -263,7 +263,7 @@ export default function ExamRoom({ paperId, questions: propQuestions, config, re
       totalCount,
       accuracy,
       score: accuracy,
-      meta: buildPersistMeta(),
+      meta: { ...buildPersistMeta(), ...extraMeta },
     });
   };
 
@@ -338,7 +338,13 @@ export default function ExamRoom({ paperId, questions: propQuestions, config, re
       paperTitle: paper?.title || config?.title || '',
     };
     try {
-      await persistProgress('completed');
+      const subjectiveMeta = subjective.map((item) => ({
+        questionId: item.questionId,
+        score: Number(item.review?.score) || 0,
+        maxScore: Number(item.review?.maxScore) || 10,
+        provider: item.review?.provider || 'local-rubric',
+      }));
+      await persistProgress('completed', answers, timeElapsed, subjectiveMeta.length ? { subjective: subjectiveMeta } : {});
       if (isWrongRedo) {
         for (const item of reviewOutcomes) {
           await window.openexam.db.reviewWrongQuestion({ questionId: item.questionId, outcome: item.outcome });

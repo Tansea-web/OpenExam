@@ -162,6 +162,10 @@ export default function PracticeHistory({ onBack, onOpenRecord, subject = '', tr
             const status = String(record.status || '').toLowerCase();
             const ongoing = ['ongoing', 'paused'].includes(status);
             const title = record.meta?.title || record.paper_title || categoryNames[record.category] || record.category || '综合练习';
+            // 主观题得分随练习记录一起保存
+            const subjective = Array.isArray(record.meta?.subjective) ? record.meta.subjective : [];
+            const subjectiveScore = subjective.reduce((sum, item) => sum + (Number(item.score) || 0), 0);
+            const subjectiveMax = subjective.reduce((sum, item) => sum + (Number(item.maxScore) || 0), 0);
             return (
               <button
                 key={record.id || idx}
@@ -193,15 +197,22 @@ export default function PracticeHistory({ onBack, onOpenRecord, subject = '', tr
                     <span className="hr-title">{title}</span>
                     <span className="hr-meta">
                       {formatDate(record.start_time || record.created_at)} · {record.total_count || 0}题 · {formatDuration(record.duration)}
+                      {subjective.length > 0 ? ` · 主观 ${subjectiveScore}/${subjectiveMax} 分` : ''}
                       {ongoing ? ' · 未完成' : ''}
                     </span>
                   </div>
                 </div>
                 <div className="hr-right">
                   <span className="hr-accuracy" style={{ color: ongoing ? 'var(--warning)' : (record.accuracy >= 60 ? 'var(--success)' : 'var(--danger)') }}>
-                    {ongoing ? '继续' : `${record.accuracy || 0}%`}
+                    {ongoing ? '继续' : (subjective.length > 0 && !record.total_count ? '主观' : `${record.accuracy || 0}%`)}
                   </span>
-                  <span className="hr-score">{ongoing ? `${Object.keys(record.answers || {}).length}/${record.total_count || 0}` : `${record.correct_count || 0}/${record.total_count || 0}`}</span>
+                  <span className="hr-score">
+                    {ongoing
+                      ? `${Object.keys(record.answers || {}).length}/${record.total_count || 0}`
+                      : subjective.length > 0 && !record.total_count
+                        ? `${subjectiveScore}/${subjectiveMax} 分`
+                        : `${record.correct_count || 0}/${record.total_count || 0}`}
+                  </span>
                 </div>
               </button>
             );
