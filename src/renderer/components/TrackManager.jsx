@@ -268,6 +268,26 @@ export default function TrackManager({ onChange }) {
     if (ok) setCategoryDraft((prev) => ({ ...prev, [subject.key]: '' }));
   };
 
+  // 分类是否支持主观题：一键切换（客观题始终保留）
+  const toggleCategoryKind = async (subject, category) => {
+    const current = Array.isArray(category.questionKinds) ? category.questionKinds : ['objective'];
+    const hasSubjective = current.includes('subjective');
+    const next = hasSubjective
+      ? current.filter((item) => item !== 'subjective')
+      : [...current, 'subjective'];
+    await runAction(
+      `cat-kind:${subject.key}:${category.key}`,
+      () => db.saveTrackCategory({
+        subjectKey: subject.key,
+        key: category.key,
+        name: category.name,
+        color: category.color,
+        questionKinds: next.length ? next : ['objective'],
+      }),
+      '题型设置失败'
+    );
+  };
+
   const removeCategory = async (subject, category) => {
     const ok = await runAction(
       `cat-del:${subject.key}:${category.key}`,
@@ -475,6 +495,22 @@ export default function TrackManager({ onChange }) {
                             >
                               <span style={{ width: 7, height: 7, borderRadius: 999, background: category.color || 'var(--accent)' }} />
                               {category.name}
+                              <button
+                                type="button"
+                                onClick={() => toggleCategoryKind(subject, category)}
+                                style={{
+                                  border: 'none',
+                                  background: 'none',
+                                  padding: 0,
+                                  fontSize: 10,
+                                  fontWeight: 700,
+                                  cursor: 'pointer',
+                                  color: (category.questionKinds || []).includes('subjective') ? 'var(--accent)' : 'var(--muted)',
+                                }}
+                                title={(category.questionKinds || []).includes('subjective') ? '已启用主观题，点击关闭' : '标记为可出主观题'}
+                              >
+                                主观
+                              </button>
                               <button
                                 type="button"
                                 onClick={() => removeCategory(subject, category)}

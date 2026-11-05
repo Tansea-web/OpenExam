@@ -120,6 +120,7 @@ const SCHEMA = `
     key TEXT NOT NULL,
     name TEXT NOT NULL,
     color TEXT,
+    question_kinds TEXT,
     sort INTEGER DEFAULT 0,
     builtin INTEGER DEFAULT 0,
     PRIMARY KEY (subject_key, key)
@@ -179,6 +180,31 @@ function mapSubject(row) {
   };
 }
 
+// 分类支持的题型：客观题 / 主观题
+const QUESTION_KINDS = ['objective', 'subjective'];
+
+function normalizeQuestionKinds(input) {
+  const list = Array.isArray(input) ? input : String(input || '').split(',');
+  const seen = new Set();
+  const result = [];
+  list.forEach((item) => {
+    const key = String(item || '').trim().toLowerCase();
+    if (!QUESTION_KINDS.includes(key) || seen.has(key)) return;
+    seen.add(key);
+    result.push(key);
+  });
+  return result.length ? result : ['objective'];
+}
+
+function parseQuestionKinds(raw) {
+  if (!raw) return ['objective'];
+  try {
+    return normalizeQuestionKinds(JSON.parse(raw));
+  } catch (error) {
+    return normalizeQuestionKinds(raw);
+  }
+}
+
 function mapCategory(row) {
   if (!row) return null;
   return {
@@ -186,6 +212,7 @@ function mapCategory(row) {
     subjectKey: row.subject_key,
     name: row.name,
     color: row.color || 'var(--accent)',
+    questionKinds: parseQuestionKinds(row.question_kinds),
     sort: Number(row.sort) || 0,
     builtin: Boolean(row.builtin),
   };
@@ -242,6 +269,14 @@ function seedBuiltin() {
 function initTrackConfig(database) {
   db = database;
   db.exec(SCHEMA);
+
+  // 老库补列：分类支持哪些题型（objective / subjective）
+  const categoryColumns = db.pragma('table_info(track_categories)');
+  if (Array.isArray(categoryColumns) && categoryColumns.length
+    && !categoryColumns.some((column) => column.name === 'question_kinds')) {
+    db.exec('ALTER TABLE track_categories ADD COLUMN question_kinds TEXT');
+  }
+
   seedBuiltin();
 
   // 历史库里软考曾被当作内置目标，放开为可编辑 / 可删除（builtin 是系统字段，用户改不了）
@@ -273,6 +308,13 @@ function listTrackConfig() {
   subjects.forEach((subject) => {
     // eslint-disable-next-line no-param-reassign
     subject.questionCount = counts.get(subject.key) || 0;
+    // 科目可用题型 = 其下分类题型的并集
+    const kinds = new Set();
+    categories
+      .filter((category) => category.subjectKey === subject.key)
+      .forEach((category) => (category.questionKinds || ['objective']).forEach((kind) => kinds.add(kind)));
+    // eslint-disable-next-line no-param-reassign
+    subject.questionKinds = kinds.size ? [...kinds] : ['objective'];
   });
 
   return { tracks, subjects, categories };
@@ -391,17 +433,19 @@ function saveCategory(input = {}) {
   const existing = db.prepare('SELECT builtin FROM track_categories WHERE subject_key = ? AND key = ?').get(subjectKey, key);
 
   db.prepare(`
-    INSERT INTO track_categories (subject_key, key, name, color, sort, builtin)
-    VALUES (@subjectKey, @key, @name, @color, @sort, 0)
+    INSERT INTO track_categories (subject_key, key, name, color, question_kinds, sort, builtin)
+    VALUES (@subjectKey, @key, @name, @color, @questionKinds, @sort, 0)
     ON CONFLICT(subject_key, key) DO UPDATE SET
       name = excluded.name,
       color = excluded.color,
+      question_kinds = excluded.question_kinds,
       sort = excluded.sort
   `).run({
     subjectKey,
     key,
     name,
     color: String(input.color || '').trim() || 'var(--accent)',
+    questionKinds: JSON.stringify(normalizeQuestionKinds(input.questionKinds || input.question_kinds)),
     sort: Number(input.sort) || 0,
   });
 
@@ -425,6 +469,8 @@ function deleteCategory(subjectKey, key) {
 
 module.exports = {
   FEATURE_KEYS,
+  QUESTION_KINDS,
+  normalizeQuestionKinds,
   BUILTIN_TRACKS,
   initTrackConfig,
   listTrackConfig,

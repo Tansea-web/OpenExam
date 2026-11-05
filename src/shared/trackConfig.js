@@ -49,6 +49,21 @@ function normalizeTrack(track = {}) {
   };
 }
 
+const QUESTION_KINDS = ['objective', 'subjective'];
+
+function normalizeKinds(input) {
+  const list = Array.isArray(input) ? input : String(input || '').split(',');
+  const seen = new Set();
+  const result = [];
+  list.forEach((item) => {
+    const key = String(item || '').trim().toLowerCase();
+    if (!QUESTION_KINDS.includes(key) || seen.has(key)) return;
+    seen.add(key);
+    result.push(key);
+  });
+  return result.length ? result : ['objective'];
+}
+
 function normalizeSubject(subject = {}) {
   return {
     key: String(subject.key || '').trim(),
@@ -58,6 +73,7 @@ function normalizeSubject(subject = {}) {
     sort: Number(subject.sort) || 0,
     builtin: Boolean(subject.builtin),
     questionCount: Number(subject.questionCount || subject.question_count || 0) || 0,
+    questionKinds: normalizeKinds(subject.questionKinds || subject.question_kinds),
   };
 }
 
@@ -67,6 +83,7 @@ function normalizeCategory(category = {}) {
     subjectKey: String(category.subjectKey || category.subject_key || '').trim(),
     name: String(category.name || category.key || '').trim(),
     color: String(category.color || '').trim(),
+    questionKinds: normalizeKinds(category.questionKinds || category.question_kinds),
     sort: Number(category.sort) || 0,
     builtin: Boolean(category.builtin),
   };

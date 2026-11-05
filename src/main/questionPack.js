@@ -53,6 +53,22 @@ function safeInt(value) {
   return Number.isFinite(num) ? Math.round(num) : 0;
 }
 
+// 分类支持的题型：objective 客观题 / subjective 主观题
+const QUESTION_KINDS = ['objective', 'subjective'];
+
+function normalizeKinds(input) {
+  const list = Array.isArray(input) ? input : String(input || '').split(',');
+  const seen = new Set();
+  const result = [];
+  list.forEach((item) => {
+    const key = String(item || '').trim().toLowerCase();
+    if (!QUESTION_KINDS.includes(key) || seen.has(key)) return;
+    seen.add(key);
+    result.push(key);
+  });
+  return result.length ? result : ['objective'];
+}
+
 function normalizeOptions(options) {
   return (Array.isArray(options) ? options : [])
     .map((option, index) => {
@@ -138,6 +154,7 @@ function normalizeTaxonomy(input) {
         key: safeKey(row.key),
         name: safeText(row.name, 40),
         color: safeText(row.color, 60) || 'var(--accent)',
+        questionKinds: normalizeKinds(row.questionKinds || row.question_kinds),
         sort: safeInt(row.sort),
       };
     })
@@ -194,6 +211,7 @@ function buildTaxonomy(papers, trackConfig) {
       key: category.key,
       name: category.name,
       color: category.color,
+      questionKinds: category.questionKinds || ['objective'],
       sort: category.sort,
     }));
 
@@ -259,7 +277,7 @@ function applyTaxonomy(pack, trackConfig) {
     try {
       const saved = trackConfig.saveCategory({
         subjectKey: row.subjectKey, key: row.key, name: row.name,
-        color: row.color, sort: row.sort,
+        color: row.color, questionKinds: row.questionKinds, sort: row.sort,
       });
       if (saved && saved.success !== false) {
         categoryKeys.add(id);
