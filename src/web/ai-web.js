@@ -326,5 +326,109 @@ export function createWebAI() {
         return { success: false, error: friendlyNetworkError(error, settings) };
       }
     },
+
+    async analyzeWrongCause(settings, payload = {}) {
+      try {
+        const parsed = await callForJson(settings, [
+          {
+            role: 'user',
+            content: [
+              '你是错题归因助手。请在五类错因中选一个最贴切的，并说明理由。',
+              '可选错因：knowledge 知识缺口 / reading 审题偏差 / calculation 计算失误 / strategy 策略不当 / time 时间失控。',
+              '',
+              `题干：\n${String(payload.content || '').slice(0, 3000)}`,
+              payload.options ? `\n选项：\n${JSON.stringify(payload.options).slice(0, 1500)}` : '',
+              `\n我的答案：${String(payload.userAnswer || '')}`,
+              `\n正确答案：${String(payload.correctAnswer || payload.answer || '')}`,
+              payload.analysis ? `\n解析：\n${String(payload.analysis).slice(0, 2000)}` : '',
+              '',
+              '输出 JSON：{"cause":"knowledge|reading|calculation|strategy|time","reason":"一句话说明"}',
+            ].filter(Boolean).join('\n'),
+          },
+        ], { maxTokens: 512 });
+
+        if (!parsed) return { success: false, error: '模型返回的归因结果无法解析' };
+        return {
+          success: true,
+          cause: String(parsed.cause || '').trim(),
+          reason: String(parsed.reason || '').trim(),
+        };
+      } catch (error) {
+        return { success: false, error: friendlyNetworkError(error, settings) };
+      }
+    },
+
+    async createVariant(settings, payload = {}) {
+      try {
+        const parsed = await callForJson(settings, [
+          {
+            role: 'user',
+            content: [
+              '基于下面这道题，出一个同考点的变式题（换情境/换数字，但考点一致，难度相当）。',
+              '',
+              `原题：\n${String(payload.content || '').slice(0, 3000)}`,
+              payload.options ? `\n选项：\n${JSON.stringify(payload.options).slice(0, 1500)}` : '',
+              `\n答案：${String(payload.answer || '')}`,
+              payload.analysis ? `\n解析：\n${String(payload.analysis).slice(0, 1500)}` : '',
+              '',
+              '输出 JSON：',
+              '{"content":"题干","options":[{"key":"A","content":"..."},{"key":"B","content":"..."},{"key":"C","content":"..."},{"key":"D","content":"..."}],"answer":"A","analysis":"解析"}',
+            ].filter(Boolean).join('\n'),
+          },
+        ], { maxTokens: 1536 });
+
+        const options = (Array.isArray(parsed?.options) ? parsed.options : [])
+          .map((item, index) => ({
+            key: String(item?.key || String.fromCharCode(65 + index)).slice(0, 2),
+            content: String(item?.content || ''),
+          }))
+          .filter((item) => item.content);
+
+        if (!parsed?.content || options.length < 2) {
+          return { success: false, error: '模型生成的变式题不完整，请重试' };
+        }
+
+        return {
+          success: true,
+          variant: {
+            content: String(parsed.content),
+            options,
+            answer: String(parsed.answer || '').trim().toUpperCase(),
+            analysis: String(parsed.analysis || ''),
+          },
+        };
+      } catch (error) {
+        return { success: false, error: friendlyNetworkError(error, settings) };
+      }
+    },
+
+    async reviewVariant(settings, variant = {}) {
+      try {
+        const parsed = await callForJson(settings, [
+          {
+            role: 'user',
+            content: [
+              '请检查下面这道题的质量：题干是否完整、选项是否成立、答案是否与选项一致。',
+              '',
+              `题干：\n${String(variant.content || '').slice(0, 3000)}`,
+              `选项：\n${JSON.stringify(variant.options || []).slice(0, 1500)}`,
+              `给出的答案：${String(variant.answer || '')}`,
+              '',
+              '输出 JSON：{"pass":true或false,"issues":["问题"],"fixedAnswer":"如果答案有误，给出正确选项字母；否则留空"}',
+            ].join('\n'),
+          },
+        ], { maxTokens: 512 });
+
+        if (!parsed) return { success: false, error: '模型返回的检查结果无法解析' };
+        return {
+          success: true,
+          pass: parsed.pass !== false,
+          issues: (Array.isArray(parsed.issues) ? parsed.issues : []).slice(0, 5).map(String),
+          fixedAnswer: String(parsed.fixedAnswer || '').trim().toUpperCase(),
+        };
+      } catch (error) {
+        return { success: false, error: friendlyNetworkError(error, settings) };
+      }
+    },
   };
 }

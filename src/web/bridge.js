@@ -300,9 +300,6 @@ function createBridge(database, trackConfig, questionPack, ctx) {
     recognizeQuestions: unsupported('AI 识题'),
     generatePaper: unsupported('AI 出卷'),
     recognizeEssay: unsupported('AI 识别'),
-    analyzeWrongCause: unsupported('AI 归因'),
-    createVariant: unsupported('AI 变式'),
-    reviewVariant: unsupported('AI 变式'),
   };
 
   return {
