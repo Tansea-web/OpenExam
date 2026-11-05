@@ -5698,8 +5698,10 @@ button {
 .hs-card {
   flex: 1;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
+  text-align: center;
+  gap: 8px;
   padding: 16px;
   background: var(--surface-soft);
   border-radius: 10px;

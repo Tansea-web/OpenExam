@@ -839,7 +839,8 @@
 
   .hs-card {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: center;
+    text-align: center;
     gap: 8px;
     padding: 12px;
   }
