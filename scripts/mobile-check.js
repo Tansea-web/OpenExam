@@ -268,6 +268,41 @@ const openPage = async (win, name) => {
   if (info.overflowX > 0) warnings.push(`${name}: ${info.overflowX}px`);
   console.log(`[${name}] ${page.label}  viewport=${info.viewport}  rail=${info.railRow}  ${flag}`);
 
+  // 标题被按钮/浮层遮挡时，移动端会显得“字被挡住”，这里顺带审计
+  const overlaps = await win.webContents.executeJavaScript(`(() => {
+    const visible = (el) => {
+      const s = getComputedStyle(el);
+      return s.display !== 'none' && s.visibility !== 'hidden' && Number(s.opacity) !== 0 && el.offsetHeight > 0;
+    };
+    const heads = [...document.querySelectorAll('h1, h2, h3, .today-title')].filter(visible);
+    const btns = [...document.querySelectorAll('button')].filter(visible);
+    const hits = [];
+    for (const head of heads) {
+      const a = head.getBoundingClientRect();
+      if (a.width < 40 || a.height < 10) continue;
+      for (const btn of btns) {
+        if (head.contains(btn) || btn.contains(head)) continue;
+        const b = btn.getBoundingClientRect();
+        const ox = Math.min(a.right, b.right) - Math.max(a.left, b.left);
+        const oy = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+        if (ox > 2 && oy > 2) {
+          hits.push({
+            head: head.textContent.trim().slice(0, 14),
+            btn: (btn.getAttribute('aria-label') || btn.textContent || '').trim().slice(0, 12),
+            ox: Math.round(ox),
+            oy: Math.round(oy),
+          });
+          break;
+        }
+      }
+    }
+    return hits.slice(0, 4);
+  })()`);
+  if (overlaps.length) {
+    // 下拉/通知/用户菜单等浮层覆盖标题是预期行为，只打印提示、不计入失败
+    console.log(`  标题被按钮遮挡: ${overlaps.map((x) => `「${x.head}」×「${x.btn}」${x.ox}x${x.oy}`).join('  ')}`);
+  }
+
   const offscreen = await auditOffscreen(win);
   if (offscreen.length) {
     console.log(`  越界元素: ${offscreen.map((item) => `${item.tag}.${item.cls}[${item.left},${item.right}]`).join('  ')}`);

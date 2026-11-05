@@ -238,6 +238,46 @@
     border-right: none !important;
   }
 
+  /* 今日：日期与按钮一行，标题独占下一行，避免按钮挤占标题文字 */
+  .today-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "date right"
+      "title title";
+    align-items: start;
+    gap: 6px 10px;
+    margin-bottom: 16px;
+  }
+
+  .today-head > div:first-child {
+    display: contents;
+  }
+
+  .today-date {
+    grid-area: date;
+    margin-bottom: 0;
+  }
+
+  .today-head-right {
+    grid-area: right;
+  }
+
+  .today-title {
+    grid-area: title;
+    font-size: 21px;
+  }
+
+  /* 成长页：顶部三个小统计换到标题下一行 */
+  .growth-page > header {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+
+  .growth-page > header > div:last-child {
+    flex: 1 0 100%;
+  }
+
   /* 错题本：顶部统计居中 */
   .wrong-stat-item {
     align-items: center;
