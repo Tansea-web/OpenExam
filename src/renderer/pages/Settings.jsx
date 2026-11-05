@@ -156,11 +156,16 @@ export default function Settings({ onBack, onTracksConfigChange, initialSection 
   }, []);
 
   const handleSave = async () => {
-    // 密钥占位符：密钥由主进程加密存储，localStorage 只保留占位
+    // 桌面端：密钥由主进程加密存储，localStorage 只保留占位；
+    // 网页端没有主进程，只能明文保存在本机浏览器（设置页已有风险提示）。
     const secured = {
       ...settings,
-      apiKey: settings.apiKey?.trim() || AI_SECURE_MARKER,
-      ocrApiKey: settings.ocrApiKey?.trim() || AI_SECURE_MARKER,
+      apiKey: __OPENEXAM_WEB__
+        ? String(settings.apiKey || '').trim()
+        : (settings.apiKey?.trim() || AI_SECURE_MARKER),
+      ocrApiKey: __OPENEXAM_WEB__
+        ? String(settings.ocrApiKey || '').trim()
+        : (settings.ocrApiKey?.trim() || AI_SECURE_MARKER),
     };
     const normalized = normalizeAISettings(secured);
     setSettings(normalized);
@@ -564,6 +569,16 @@ export default function Settings({ onBack, onTracksConfigChange, initialSection 
               <div>
                 <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>AI 模型配置</h3>
                 <p style={{ fontSize: 12, color: "var(--muted)" }}>配置 AI 服务后，可使用智能 OCR 识别导入试卷，并支持 AI 错题解析</p>
+                {__OPENEXAM_WEB__ && (
+                  <p style={{
+                    marginTop: 8, padding: '8px 10px', borderRadius: 8,
+                    background: 'var(--warning-soft)', color: 'var(--text)',
+                    fontSize: 11, lineHeight: 1.6,
+                  }}>
+                    网页端由浏览器直接请求模型服务：密钥只保存在本机浏览器（明文），请勿在公用设备填写。
+                    部分服务商不允许浏览器直连，若提示连接失败/CORS，可换服务商或改用桌面端。
+                  </p>
+                )}
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: 12 }}>

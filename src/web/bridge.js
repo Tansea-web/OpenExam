@@ -11,6 +11,8 @@
  * sql.js 以普通 <script> 方式加载（不走打包器）。
  * 原因：它的 UMD 分支里有 require('fs')/'path'，被打包器静态化后会在浏览器里报错。
  */
+import { createWebAI } from './ai-web.js';
+
 const SQLJS_URL = new URL('sql/sql-wasm.js', document.baseURI).href;
 const SQLJS_WASM_URL = new URL('sql/sql-wasm.wasm', document.baseURI).href;
 
@@ -292,16 +294,11 @@ function createBridge(database, trackConfig, questionPack, ctx) {
     onUpdateState: () => () => {},
   };
 
+  // 浏览器直连模型：连接测试 / 对话 / 流式（伪）/ 主观题与申论批改
   const ai = {
-    testConnection: unsupported('AI 连接'),
+    ...createWebAI(),
     recognizeQuestions: unsupported('AI 识题'),
-    chat: unsupported('AI 对话'),
-    chatStreamStart: unsupported('AI 流式对话'),
-    chatStreamCancel: async () => true,
-    onChatStreamEvent: () => () => {},
     generatePaper: unsupported('AI 出卷'),
-    gradeEssay: unsupported('AI 批改'),
-    gradeSubjective: unsupported('AI 批改'),
     recognizeEssay: unsupported('AI 识别'),
     analyzeWrongCause: unsupported('AI 归因'),
     createVariant: unsupported('AI 变式'),
