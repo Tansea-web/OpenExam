@@ -207,22 +207,38 @@
     gap: 8px;
   }
 
-  /* 题型分布：保持左右分布，放大环形图以利用右侧空间 */
+  /* 题型分布：保持左图右例，右侧空间富余，放大环形图填满左侧 */
   .home-dist-body {
-    flex-direction: row;
     align-items: center;
-    gap: 18px;
+    gap: 12px;
   }
 
   .home-donut {
-    flex: 0 0 auto;
-    width: 140px;
-    height: 140px;
+    width: 128px;
+    height: 128px;
+    margin: 0;
+  }
+
+  .home-donut-inner {
+    width: 92px;
+    height: 92px;
+  }
+
+  .home-donut-inner strong {
+    font-size: 20px;
+  }
+
+  .home-donut-inner span {
+    font-size: 10px;
+    margin-top: 4px;
   }
 
   .home-dist-legend {
-    flex: 1 1 auto;
-    gap: 14px;
+    gap: 9px;
+  }
+
+  .home-dist-bar {
+    width: 28px;
   }
 
   /* ── 通用：长文本换行，禁止横向溢出 ── */
