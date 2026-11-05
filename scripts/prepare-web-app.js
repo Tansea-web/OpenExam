@@ -32,8 +32,7 @@ if (fs.existsSync(staleDataDir)) {
 copyDirectory(PUBLIC_SRC, OUT);
 
 // 题库不再随包分发：首屏只初始化空库，题目由「导入题库包」按需载入
-// 图标优先使用 src/web/public 里已按尺寸生成的 192/512，缺失时才用 logo 兜底
-if (!fs.existsSync(path.join(OUT, 'icon-512.png')) && fs.existsSync(LOGO)) {
+if (fs.existsSync(LOGO)) {
   fs.copyFileSync(LOGO, path.join(OUT, 'icon-512.png'));
 }
 
