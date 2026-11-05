@@ -1581,6 +1581,27 @@ function OriginalHomePage({ examTrack = "gongkao", tracksConfig, onGoAIGenerate,
           )}
         </header>
 
+        <div className="home-side-progress">
+          <div className="home-side-progress-head">
+            <h4>学习进度</h4>
+            <span>{stats.accuracy}% 正确率</span>
+          </div>
+          <div className="home-side-progress-body">
+            <div className="home-side-ring" style={{ background: `conic-gradient(var(--accent) ${overallPct * 3.6}deg, var(--accent-soft-bg) 0deg)` }}>
+              <div><strong>{totalQuestions > 0 ? `${overallPct}%` : "—"}</strong></div>
+            </div>
+            <div className="home-side-progress-copy">
+              <strong>{trackLabel}完成度</strong>
+              <span>
+                {totalQuestions > 0
+                  ? `已练 ${trackDone.toLocaleString()} / ${totalQuestions.toLocaleString()} 题`
+                  : "本类目还没有题目"}
+              </span>
+              <span>今日 {Number(todayStats.total || 0)} 道 · 错题 {stats.wrongCount}</span>
+            </div>
+          </div>
+        </div>
+
         <div className="home-chart-block">
           <div className="home-chart-head">
             <div className="home-chart-title">
@@ -1625,7 +1646,59 @@ function OriginalHomePage({ examTrack = "gongkao", tracksConfig, onGoAIGenerate,
           })()}
         </div>
 
-        <div className="home-bottom-grid">
+        <div className="home-side-banks">
+          <div className="home-side-banks-head">
+            <h4>{trackLabel}题库</h4>
+            <button type="button" onClick={() => onOpenPractice?.()}>全部 {categories.length} &gt;</button>
+          </div>
+          <div className="home-side-banks-list">
+            {categories.length === 0 ? (
+              <div className="home-side-bank-empty">
+                <p>还没有{trackLabel}题目</p>
+                <button type="button" onClick={() => onOpenPractice?.()}>去导入题目</button>
+              </div>
+            ) : categories.map((cat, i) => {
+              const pct = typeof cat.accuracy === 'number' && cat.answered > 0
+                ? cat.accuracy
+                : (cat.total > 0 ? Math.round(((cat.done || 0) / cat.total) * 100) : 0);
+              const isTop = i < 3;
+              const rankColor = i === 0 ? "var(--warning)" : i === 1 ? "#98a3b6" : i === 2 ? "#bf8b5d" : "var(--muted)";
+              return (
+                <button key={cat.category} type="button" className="home-side-bank" onClick={() => onStartCategory?.(cat.category)}>
+                  <span className="home-side-rank" style={{ color: isTop ? rankColor : "var(--muted)" }}>{i + 1}</span>
+                  <span className="home-side-icon">{categoryIcons[cat.category] || <I d={<circle cx="12" cy="12" r="10"/>} />}</span>
+                  <div className="home-side-bank-copy">
+                    <div className="home-side-bank-top">
+                      <span>{getCategoryDisplay(tracksConfig, cat.category).name}</span>
+                      <span><b>{cat.done || 0}</b>/{cat.total.toLocaleString()}</span>
+                    </div>
+                    <div className="home-side-bank-bar">
+                      <div className="home-side-bank-track">
+                        <div style={{ width: `${Math.max(0, Math.min(100, pct))}%` }} />
+                      </div>
+                      <em>{pct}%</em>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      <aside className="side-panel home-side">
+        <div className="home-quick-links">
+          {[
+            { label: '专项练习', onClick: onOpenPractice },
+            { label: '错题本', onClick: onOpenWrongBook },
+            { label: '练习历史', onClick: onOpenHistory },
+            { label: '分析报告', onClick: onOpenAnalytics },
+          ].map((item) => (
+            <button key={item.label} type="button" onClick={() => item.onClick?.()}>{item.label}</button>
+          ))}
+        </div>
+
+        <div className="home-side-stats">
           <div className="home-stat-card">
             <div className="home-stat-card-head">
               <h3>题型分布</h3>
@@ -1690,79 +1763,6 @@ function OriginalHomePage({ examTrack = "gongkao", tracksConfig, onGoAIGenerate,
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-      </section>
-
-      <aside className="side-panel home-side">
-        <div className="home-quick-links">
-          {[
-            { label: '专项练习', onClick: onOpenPractice },
-            { label: '错题本', onClick: onOpenWrongBook },
-            { label: '练习历史', onClick: onOpenHistory },
-            { label: '分析报告', onClick: onOpenAnalytics },
-          ].map((item) => (
-            <button key={item.label} type="button" onClick={() => item.onClick?.()}>{item.label}</button>
-          ))}
-        </div>
-
-        <div className="home-side-progress">
-          <div className="home-side-progress-head">
-            <h4>学习进度</h4>
-            <span>{stats.accuracy}% 正确率</span>
-          </div>
-          <div className="home-side-progress-body">
-            <div className="home-side-ring" style={{ background: `conic-gradient(var(--accent) ${overallPct * 3.6}deg, var(--accent-soft-bg) 0deg)` }}>
-              <div><strong>{totalQuestions > 0 ? `${overallPct}%` : "—"}</strong></div>
-            </div>
-            <div className="home-side-progress-copy">
-              <strong>{trackLabel}完成度</strong>
-              <span>
-                {totalQuestions > 0
-                  ? `已练 ${trackDone.toLocaleString()} / ${totalQuestions.toLocaleString()} 题`
-                  : "本类目还没有题目"}
-              </span>
-              <span>今日 {Number(todayStats.total || 0)} 道 · 错题 {stats.wrongCount}</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="home-side-banks">
-          <div className="home-side-banks-head">
-            <h4>{trackLabel}题库</h4>
-            <button type="button" onClick={() => onOpenPractice?.()}>全部 {categories.length} &gt;</button>
-          </div>
-          <div className="home-side-banks-list">
-            {categories.length === 0 ? (
-              <div className="home-side-bank-empty">
-                <p>还没有{trackLabel}题目</p>
-                <button type="button" onClick={() => onOpenPractice?.()}>去导入题目</button>
-              </div>
-            ) : categories.map((cat, i) => {
-              const pct = typeof cat.accuracy === 'number' && cat.answered > 0
-                ? cat.accuracy
-                : (cat.total > 0 ? Math.round(((cat.done || 0) / cat.total) * 100) : 0);
-              const isTop = i < 3;
-              const rankColor = i === 0 ? "var(--warning)" : i === 1 ? "#98a3b6" : i === 2 ? "#bf8b5d" : "var(--muted)";
-              return (
-                <button key={cat.category} type="button" className="home-side-bank" onClick={() => onStartCategory?.(cat.category)}>
-                  <span className="home-side-rank" style={{ color: isTop ? rankColor : "var(--muted)" }}>{i + 1}</span>
-                  <span className="home-side-icon">{categoryIcons[cat.category] || <I d={<circle cx="12" cy="12" r="10"/>} />}</span>
-                  <div className="home-side-bank-copy">
-                    <div className="home-side-bank-top">
-                      <span>{getCategoryDisplay(tracksConfig, cat.category).name}</span>
-                      <span><b>{cat.done || 0}</b>/{cat.total.toLocaleString()}</span>
-                    </div>
-                    <div className="home-side-bank-bar">
-                      <div className="home-side-bank-track">
-                        <div style={{ width: `${Math.max(0, Math.min(100, pct))}%` }} />
-                      </div>
-                      <em>{pct}%</em>
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
           </div>
         </div>
 

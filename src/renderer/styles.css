@@ -7822,6 +7822,26 @@ button {
   border-radius: 0;
 }
 
+.home-side-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* 题型分布移到右侧窄栏后，环形图与图例收紧（仅桌面两栏布局，移动端仍用大环） */
+@media (min-width: 769px) {
+  .home-side .home-dist-body { gap: 10px; }
+  .home-side .home-donut { width: 78px; height: 78px; }
+  .home-side .home-donut-inner { width: 54px; height: 54px; }
+  .home-side .home-donut-inner strong { font-size: 12px; }
+  .home-side .home-donut-inner span { font-size: 8px; margin-top: 2px; }
+  .home-side .home-dist-legend { gap: 7px; }
+  .home-side .home-dist-legend-item { gap: 6px; }
+  .home-side .home-dist-bar { width: 18px; }
+  .home-side .home-dist-name { font-size: 9px; }
+  .home-side .home-dist-legend-item strong { font-size: 11px; white-space: nowrap; }
+}
+
 .home-quick-links {
   display: flex;
   flex-wrap: wrap;
