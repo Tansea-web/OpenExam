@@ -7835,6 +7835,30 @@ button {
   gap: 14px;
 }
 
+/* 学习进度：环形在左，文案靠右（桌面与移动端一致） */
+.home-side-progress-copy {
+  margin-left: auto;
+  align-items: flex-end;
+  text-align: right;
+}
+
+/* 题型分布：图例整体靠右 */
+.home-side .home-dist-legend-item {
+  justify-content: flex-end;
+}
+
+/* 数据纵览：格子内文字居中 */
+.home-side-metric {
+  align-items: center;
+  text-align: center;
+}
+
+/* 错题本：顶部统计文字居中 */
+.wrong-stat-item {
+  align-items: center;
+  text-align: center;
+}
+
 /* 题型分布移到右侧窄栏后，环形图与图例收紧（仅桌面两栏布局，移动端仍用大环） */
 @media (min-width: 1025px) {
   .home-side .home-dist-body { gap: 10px; }
