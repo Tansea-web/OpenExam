@@ -228,6 +228,16 @@
     text-align: center;
   }
 
+  /* 设置-数据管理：四块内容单列时左对齐一致，去掉多余的右侧分隔线 */
+  .st-data-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .st-data-grid > div {
+    padding: 16px 0 !important;
+    border-right: none !important;
+  }
+
   /* 错题本：顶部统计居中 */
   .wrong-stat-item {
     align-items: center;
