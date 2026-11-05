@@ -6,7 +6,7 @@
  *   - 静态资源 cache-first：文件名带 hash，命中即返回，未命中回源并回填；
  *   - 发版时改动 VERSION 可强制清空全部旧缓存。
  */
-const VERSION = 'v3';
+const VERSION = 'v4';
 const CACHE = `openexam-${VERSION}`;
 const PRECACHE = ['./', './index.html', './manifest.webmanifest'];
 const NAV_TIMEOUT = 4000;
