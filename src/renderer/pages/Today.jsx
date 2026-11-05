@@ -114,16 +114,6 @@ export default function Today({
     load();
   };
 
-  const removeItem = async (item) => {
-    const ok = await dialog.confirm({
-      title: "删除待办",
-      message: `确定删除「${item.title}」？${item.templateId ? "明天仍会按模板生成，要彻底停掉请到待办设置。" : ""}`,
-    });
-    if (!ok) return;
-    await window.openexam.todo.deleteInstance(item.id);
-    load();
-  };
-
   const submitDraft = async () => {
     const title = draftTitle.trim();
     if (!title) { setAdding(false); return; }
@@ -241,9 +231,6 @@ export default function Today({
                     {meta.action}
                   </button>
                 )}
-                <button type="button" className="today-remove" onClick={() => removeItem(item)} aria-label="删除">
-                  <Icon path={TrashIcon} size={14} />
-                </button>
               </div>
             </li>
           );
