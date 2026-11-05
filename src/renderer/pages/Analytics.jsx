@@ -172,6 +172,7 @@ export default function Analytics({ onOpenSettings, onStartPractice, tracksConfi
   });
   const [categories, setCategories] = useState([]);
   const [subjectStats, setSubjectStats] = useState([]);
+  const [subjectiveStats, setSubjectiveStats] = useState(null);
   const [diagnosis, setDiagnosis] = useState("");
   const [diagnosisLoading, setDiagnosisLoading] = useState(false);
   const [diagnosisError, setDiagnosisError] = useState("");
@@ -180,14 +181,16 @@ export default function Analytics({ onOpenSettings, onStartPractice, tracksConfi
     (async () => {
       if (!window.openexam?.db) return;
       try {
-        const [s, c, subjects] = await Promise.all([
+        const [s, c, subjects, subjective] = await Promise.all([
           window.openexam.db.getPracticeStats(),
           window.openexam.db.getCategoryStats(),
           window.openexam.db.getSubjectStats?.() || Promise.resolve([]),
+          window.openexam.db.getSubjectiveStats?.() || Promise.resolve(null),
         ]);
         setStats(s);
         setCategories(c);
         setSubjectStats(Array.isArray(subjects) ? subjects : []);
+        setSubjectiveStats(subjective || null);
       } catch (e) { console.error(e); }
     })();
   }, []);
@@ -317,6 +320,23 @@ export default function Analytics({ onOpenSettings, onStartPractice, tracksConfi
             <StatCard key={c.label} {...c} />
           ))}
         </div>
+
+        {subjectiveStats && subjectiveStats.questions > 0 && (
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+            padding: '10px 14px', borderRadius: 12, border: '1px solid var(--line)', background: 'var(--surface)',
+          }}>
+            <span style={{ fontSize: 12, color: 'var(--text)' }}>
+              主观题已批改 <b>{subjectiveStats.questions}</b> 题 · 平均得分率{' '}
+              <b style={{ color: subjectiveStats.accuracy >= 60 ? 'var(--success)' : 'var(--warning)' }}>
+                {subjectiveStats.accuracy}%
+              </b>
+            </span>
+            <span style={{ fontSize: 11, color: 'var(--muted)' }}>
+              {subjectiveStats.score}/{subjectiveStats.maxScore} 分
+            </span>
+          </div>
+        )}
 
         {/* Row 2 — two-column layout */}
         <div className="an-row2" style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: 20, flex: 1, minHeight: 0 }}>

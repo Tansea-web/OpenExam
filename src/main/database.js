@@ -1116,6 +1116,40 @@ function repairQuestionCategories() {
   return repairQuestionTaxonomy();
 }
 
+// 主观题得分统计：从练习记录的 meta 里聚合（不污染客观题正确率）
+function getSubjectiveStats() {
+  const rows = db.prepare("SELECT meta FROM practice_records WHERE meta LIKE '%\"subjective\"%'").all();
+  let attempts = 0;
+  let questions = 0;
+  let score = 0;
+  let maxScore = 0;
+
+  rows.forEach((row) => {
+    let meta;
+    try {
+      meta = JSON.parse(row.meta || '{}');
+    } catch (error) {
+      return;
+    }
+    const list = Array.isArray(meta?.subjective) ? meta.subjective : [];
+    if (!list.length) return;
+    attempts += 1;
+    list.forEach((item) => {
+      questions += 1;
+      score += Number(item.score) || 0;
+      maxScore += Number(item.maxScore) || 0;
+    });
+  });
+
+  return {
+    attempts,
+    questions,
+    score: Math.round(score * 10) / 10,
+    maxScore: Math.round(maxScore * 10) / 10,
+    accuracy: maxScore > 0 ? Math.round((score / maxScore) * 100) : 0,
+  };
+}
+
 // 获取练习统计
 function getPracticeStats() {
   const totalQuestions = db.prepare('SELECT COUNT(*) as count FROM questions').get().count;
@@ -2454,6 +2488,7 @@ module.exports = {
   repairQuestionTaxonomy,
   repairQuestionQuality,
   getPracticeStats,
+  getSubjectiveStats,
   importPaper,
   saveAIPaper,
   getImportedPapers,

@@ -178,6 +178,10 @@ ipcMain.handle("db:getPracticeStats", () => {
   return database.getPracticeStats();
 });
 
+ipcMain.handle("db:getSubjectiveStats", () => {
+  return database.getSubjectiveStats();
+});
+
 ipcMain.handle("db:importPaper", (event, { paperData, questions }) => {
   return database.importPaper(paperData, questions);
 });

@@ -34,6 +34,7 @@ contextBridge.exposeInMainWorld("openexam", {
     getSmartRecommend: (options) => ipcRenderer.invoke("db:getSmartRecommend", options),
     getSubCategoryStats: (category, options) => ipcRenderer.invoke("db:getSubCategoryStats", category, options),
     getPracticeStats: () => ipcRenderer.invoke("db:getPracticeStats"),
+    getSubjectiveStats: () => ipcRenderer.invoke("db:getSubjectiveStats"),
     importPaper: (paperData, questions) => ipcRenderer.invoke("db:importPaper", { paperData, questions }),
     saveAIPaper: (paperData, questions) => ipcRenderer.invoke("db:saveAIPaper", { paperData, questions }),
     getImportedPapers: () => ipcRenderer.invoke("db:getImportedPapers"),

@@ -194,6 +194,7 @@ function createBridge(database, trackConfig, questionPack, ctx) {
     getSmartRecommend: (options) => call('getSmartRecommend', options || {}),
     getSubCategoryStats: (category, options) => call('getSubCategoryStats', category, options || {}),
     getPracticeStats: () => call('getPracticeStats'),
+    getSubjectiveStats: () => call('getSubjectiveStats'),
     importPaper: (paperData, questions) => call('importPaper', paperData, questions),
     saveAIPaper: (paperData, questions) => call('saveAIPaper', paperData, questions),
     getImportedPapers: () => call('getImportedPapers'),
