@@ -403,8 +403,10 @@
   }
 
   .summary-item {
-    flex: 1 1 40%;
+    flex: 1 1 calc(50% - 8px);
     min-width: 0;
+    align-items: center;
+    text-align: center;
   }
 
   .summary-divider {
@@ -549,6 +551,22 @@
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 
+  /* 分析报告：2×2 指标块内容居中 */
+  .an-stats .stat-metric {
+    align-items: center;
+    text-align: center;
+    padding: 10px 6px 12px;
+  }
+
+  .an-stats .stat-metric-top {
+    justify-content: center;
+    gap: 6px;
+  }
+
+  .an-stats .stat-metric-value {
+    justify-content: center;
+  }
+
   .an-row2 {
     grid-template-columns: minmax(0, 1fr) !important;
   }
@@ -619,6 +637,17 @@
   .growth-grid {
     grid-template-columns: minmax(0, 1fr) !important;
     gap: 18px !important;
+  }
+
+  /* 成长页「累计数据」2×2 指标块内容居中 */
+  .growth-cum-item {
+    align-items: center !important;
+    text-align: center;
+    padding: 12px 6px !important;
+  }
+
+  .growth-cum-head {
+    justify-content: center !important;
   }
 }
 

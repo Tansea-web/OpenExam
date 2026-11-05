@@ -241,8 +241,8 @@ export default function GrowthCenter({ onOpenAchievements, onStartPractice }) {
                 { label: "错误累计", val: d.practiceStats.wrongCount  || 0, color: "var(--danger)", icon: ICONS.wrong },
                 { label: "学习天数", val: studyDays, color: "var(--warning)", icon: ICONS.days },
               ].map((item, index) => (
-                <div key={item.label} style={{ display: "flex", flexDirection: "column", gap: 5, padding: "10px 8px 10px 0", borderBottom: index < 2 ? "1px solid var(--line)" : "none", borderRight: index % 2 === 0 ? "1px solid var(--line)" : "none" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <div key={item.label} className="growth-cum-item" style={{ display: "flex", flexDirection: "column", gap: 5, padding: "10px 8px 10px 0", borderBottom: index < 2 ? "1px solid var(--line)" : "none", borderRight: index % 2 === 0 ? "1px solid var(--line)" : "none" }}>
+                  <div className="growth-cum-head" style={{ display: "flex", alignItems: "center", gap: 4 }}>
                     <Ico d={item.icon} size={11} col={item.color} sw={2} />
                     <span style={{ fontSize: 9, color: "var(--muted)", fontWeight: 500 }}>{item.label}</span>
                   </div>
