@@ -197,18 +197,35 @@
     overflow: visible;
   }
 
-  /* 题型分布图例：数字靠右对齐，利用满整行宽度 */
+  /* 学习进度：环形在左，右侧文案靠右对齐 */
+  .home-side-progress-copy {
+    margin-left: auto;
+    align-items: flex-end;
+    text-align: right;
+  }
+
+  /* 题型分布：色条 + 名称 + 数量整体靠右 */
+  .home-side .home-dist-legend-item {
+    justify-content: flex-end;
+  }
+
   .home-side .home-dist-legend-item > div {
-    flex: 1;
+    flex: 0 1 auto;
     min-width: 0;
     display: flex;
     align-items: baseline;
-    justify-content: space-between;
+    justify-content: flex-end;
     gap: 8px;
   }
 
   .home-side .home-dist-legend-item strong {
     white-space: nowrap;
+  }
+
+  /* 数据纵览：格子内文字居中 */
+  .home-side-metric {
+    align-items: center;
+    text-align: center;
   }
 
   /* ── 触控目标 ≥44px ── */
