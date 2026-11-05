@@ -190,8 +190,25 @@
 
   .side-panel.home-side {
     display: flex;
+    width: 100%;
     height: auto;
+    padding: 0 0 18px;
+    border-left: none;
     overflow: visible;
+  }
+
+  /* 题型分布图例：数字靠右对齐，利用满整行宽度 */
+  .home-side .home-dist-legend-item > div {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .home-side .home-dist-legend-item strong {
+    white-space: nowrap;
   }
 
   /* ── 触控目标 ≥44px ── */

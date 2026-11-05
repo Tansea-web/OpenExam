@@ -1646,6 +1646,33 @@ function OriginalHomePage({ examTrack = "gongkao", tracksConfig, onGoAIGenerate,
           })()}
         </div>
 
+        <div className="home-stat-card home-acc-card">
+          <div className="home-stat-card-head">
+            <h3>正确率统计</h3>
+            <span className="home-stat-dot" />
+          </div>
+          <div className="home-acc-body">
+            <div className="home-acc-hero">
+              <span className="home-acc-num">{stats.accuracy}</span>
+              <span className="home-acc-unit">%</span>
+              <span className="home-acc-label">综合正确率</span>
+            </div>
+            <div className="home-acc-bar">
+              <div style={{ width: `${stats.accuracy}%` }} />
+            </div>
+            <div className="home-acc-split">
+              <div>
+                <div className="home-acc-split-label"><i className="ok" />已掌握</div>
+                <strong>{stats.correctCount.toLocaleString()} <em>道</em></strong>
+              </div>
+              <div className="is-end">
+                <div className="home-acc-split-label"><i className="bad" />待加强</div>
+                <strong>{stats.wrongCount.toLocaleString()} <em>道</em></strong>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div className="home-side-banks">
           <div className="home-side-banks-head">
             <h4>{trackLabel}题库</h4>
@@ -1734,33 +1761,6 @@ function OriginalHomePage({ examTrack = "gongkao", tracksConfig, onGoAIGenerate,
                     </div>
                   </div>
                 ))}
-              </div>
-            </div>
-          </div>
-
-          <div className="home-stat-card">
-            <div className="home-stat-card-head">
-              <h3>正确率统计</h3>
-              <span className="home-stat-dot" />
-            </div>
-            <div className="home-acc-body">
-              <div className="home-acc-hero">
-                <span className="home-acc-num">{stats.accuracy}</span>
-                <span className="home-acc-unit">%</span>
-                <span className="home-acc-label">综合正确率</span>
-              </div>
-              <div className="home-acc-bar">
-                <div style={{ width: `${stats.accuracy}%` }} />
-              </div>
-              <div className="home-acc-split">
-                <div>
-                  <div className="home-acc-split-label"><i className="ok" />已掌握</div>
-                  <strong>{stats.correctCount.toLocaleString()} <em>道</em></strong>
-                </div>
-                <div className="is-end">
-                  <div className="home-acc-split-label"><i className="bad" />待加强</div>
-                  <strong>{stats.wrongCount.toLocaleString()} <em>道</em></strong>
-                </div>
               </div>
             </div>
           </div>
