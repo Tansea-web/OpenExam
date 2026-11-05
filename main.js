@@ -604,7 +604,7 @@ ipcMain.handle("pack:importFromFile", async () => {
     // 先补齐目标/科目/分类，题目分类归一化才有词表可用
     const taxonomy = questionPack.applyTaxonomy(checked.pack, trackConfig);
     const result = database.importQuestionPack(checked.pack);
-    return { success: result.importedPapers > 0, filePath: target.filePaths[0], ...result, taxonomy };
+    return { success: result.importedPapers > 0, filePath: target.filePaths[0], ...result, taxonomy, failures: checked.failures || [] };
   } catch (error) {
     return { success: false, error: error.message };
   }

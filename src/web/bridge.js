@@ -335,7 +335,7 @@ function createBridge(database, trackConfig, questionPack, ctx) {
         const result = call('importQuestionPack', checked.pack);
         await ctx.saveBank();
         await ctx.flushUser();
-        return { success: result.importedPapers > 0, ...result, taxonomy };
+        return { success: result.importedPapers > 0, ...result, taxonomy, failures: checked.failures || [] };
       },
       async importFromFile() {
         const file = await pickJsonFile();

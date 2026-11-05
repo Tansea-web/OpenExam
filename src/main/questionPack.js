@@ -266,38 +266,42 @@ function validatePack(input) {
   if (!rawPapers.length) errors.push('题库包里没有试卷');
 
   const papers = [];
+  const failures = [];
   let totalQuestions = 0;
 
   rawPapers.forEach((rawPaper, paperIndex) => {
     const paper = isPlainObject(rawPaper) ? rawPaper : {};
     const title = String(paper.title || '').trim();
     if (!title) {
-      errors.push(`第 ${paperIndex + 1} 套试卷缺少标题`);
+      failures.push(`第 ${paperIndex + 1} 套试卷缺少标题，已跳过`);
       return;
     }
     const questions = (Array.isArray(paper.questions) ? paper.questions : [])
       .map((question, index) => normalizeQuestion(question, index))
       .filter((question) => question.content && question.options.length >= 2);
 
-    if (!questions.length) {
-      errors.push(`试卷「${title}」没有可用题目（缺题干或选项少于 2 项）`);
+    // 答案可以是单字母或多字母组合（多选）；只要每个字母都对应某个选项即为有效
+    const clean = questions.filter((question) => {
+      const optionKeys = new Set(question.options.map((option) => option.key));
+      const answerKeys = String(question.answer || '').split('').filter((char) => /[A-Z]/.test(char));
+      return answerKeys.length > 0 && answerKeys.every((key) => optionKeys.has(key));
+    });
+    const skipped = questions.length - clean.length;
+    if (skipped) failures.push(`试卷「${title}」有 ${skipped} 道题答案异常，已跳过`);
+
+    if (!clean.length) {
+      failures.push(`试卷「${title}」没有可用题目，已跳过`);
       return;
     }
 
-    const badAnswer = questions.filter((question) => !question.options.some((option) => option.key === question.answer));
-    if (badAnswer.length) {
-      errors.push(`试卷「${title}」有 ${badAnswer.length} 道题的答案不在选项中`);
-      return;
-    }
-
-    totalQuestions += questions.length;
+    totalQuestions += clean.length;
     papers.push({
       id: String(paper.id || `pack_${paperIndex + 1}`),
       title,
       year: Number(paper.year) || new Date().getFullYear(),
       type: String(paper.type || 'imported'),
       subject: String(paper.subject || '').trim(),
-      questions,
+      questions: clean,
     });
   });
 
@@ -309,6 +313,7 @@ function validatePack(input) {
   return {
     valid: errors.length === 0,
     errors,
+    failures,
     pack: errors.length === 0
       ? { schemaVersion: PACK_VERSION, papers, totalQuestions, ...(taxonomy ? { taxonomy } : {}) }
       : null,
