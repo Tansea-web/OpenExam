@@ -69,7 +69,7 @@ const DynamicChart = ({ data, onHover }) => {
   }, [data, dims.w]);
 
   const W = dims.w, H = dims.h;
-  const PAD_R = 8, PAD_T = 10, PAD_B = 8;
+  const PAD_R = 8, PAD_T = 8, PAD_B = 0;
   const chartW = W - PAD_R;
   const chartH = H - PAD_T - PAD_B;
 
@@ -1638,7 +1638,20 @@ function OriginalHomePage({ examTrack = "gongkao", tracksConfig, onGoAIGenerate,
                 <div className="home-chart-canvas" onMouseLeave={() => setHoverDay(null)}>
                   <DynamicChart data={dailyStats} onHover={setHoverDay} />
                   <div className="home-chart-xticks">
-                    {dayLabels.map((l, i) => <span key={i}>周{l}</span>)}
+                    {dayLabels.map((l, i) => {
+                      const last = i === dayLabels.length - 1;
+                      return (
+                        <span
+                          key={i}
+                          style={{
+                            left: dayLabels.length === 1 ? '50%' : `${(i / (dayLabels.length - 1)) * 100}%`,
+                            transform: i === 0 ? 'translateX(0)' : last ? 'translateX(-100%)' : 'translateX(-50%)',
+                          }}
+                        >
+                          周{l}
+                        </span>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
