@@ -66,6 +66,7 @@ export default function Today({
   onStartEssay,
   onOpenNotes,
   onOpenTemplates,
+  onStartRecommend,
 }) {
   const dialog = useDialog();
   const [daily, setDaily] = useState(null);
@@ -74,6 +75,7 @@ export default function Today({
   const [adding, setAdding] = useState(false);
   const [draftTitle, setDraftTitle] = useState("");
   const [managing, setManaging] = useState(false);
+  const [recommend, setRecommend] = useState([]);
 
   const load = useCallback(async () => {
     if (!window.openexam?.todo) return;
@@ -84,6 +86,13 @@ export default function Today({
       ]);
       setDaily(data);
       setStreak(streakData?.streak || 0);
+      // 今日推荐与分析报告同源，失败不影响待办展示
+      try {
+        const rec = await window.openexam?.db?.getSmartRecommend?.({ limit: 3 });
+        setRecommend(Array.isArray(rec) ? rec : []);
+      } catch (error) {
+        setRecommend([]);
+      }
     } catch (error) {
       console.error("加载今日待办失败:", error);
     } finally {
@@ -258,6 +267,32 @@ export default function Today({
           )}
         </li>
       </ul>
+
+      {recommend.length > 0 && (
+        <section className="today-recommend">
+          <div className="today-recommend-head">
+            <strong>今日推荐</strong>
+            <span>按正确率与完成度挑的 {recommend.length} 件事</span>
+          </div>
+          <div className="today-recommend-list">
+            {recommend.map((item, index) => (
+              <button
+                key={item.id || item.title || index}
+                type="button"
+                className="today-recommend-item"
+                onClick={() => onStartRecommend?.(item)}
+              >
+                <span className="today-recommend-rank">{index + 1}</span>
+                <span className="today-recommend-copy">
+                  <b>{item.title}</b>
+                  <em>{item.reason}</em>
+                </span>
+                <span className="today-recommend-go">去练</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
 
       {managing && (
         <TemplateManager

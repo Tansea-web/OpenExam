@@ -9044,6 +9044,103 @@ button {
   border-color: var(--accent-border-soft);
 }
 
+/* 今日推荐（今日页底部） */
+.today-recommend {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.today-recommend-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.today-recommend-head strong {
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.today-recommend-head span {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.today-recommend-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.today-recommend-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.today-recommend-item:hover {
+  border-color: var(--accent-border-soft);
+  background: var(--accent-soft-bg);
+}
+
+.today-recommend-rank {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  background: var(--accent-soft-bg);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.today-recommend-copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.today-recommend-copy b {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.today-recommend-copy em {
+  font-size: 11px;
+  font-style: normal;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.today-recommend-go {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
 /* 进度条 */
 .today-progress {
   display: flex;

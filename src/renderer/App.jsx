@@ -1303,6 +1303,7 @@ export default function App() {
                   onStartVocab={() => { setActiveTab('题库练习'); handleStartPractice('yanyu', 'xuanci', { questionCount: 15, mode: 'practice', shuffle: true }); }}
                   onStartEssay={() => { setActiveTab(''); setPage('essay'); }}
                   onOpenNotes={() => { setActiveTab(''); setPage('notes'); }}
+                  onStartRecommend={handleStartRecommend}
                 />
               ) : page === "essay" ? (
                 <Essay />
@@ -1398,7 +1399,6 @@ export default function App() {
                 <Analytics
                   tracksConfig={tracksConfig}
                   onOpenSettings={() => { setSettingsSection("ai"); setPage("settings"); }}
-                  onStartRecommend={handleStartRecommend}
                   onStartPractice={(category) => handleStartPractice(category, 'all', { questionCount: 10, mode: 'practice', shuffle: true })}
                 />
               ) : page === "growth" ? (

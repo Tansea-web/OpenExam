@@ -310,15 +310,27 @@ const openPage = async (win, name) => {
   }
 
   if (opt.scroll === 'bottom') {
-    await win.webContents.executeJavaScript(`(() => {
+    const scrolledTo = await win.webContents.executeJavaScript(`(() => {
       const pv = document.querySelector('.page-view');
       if (pv && pv.scrollHeight > pv.clientHeight + 4) {
         pv.scrollTop = pv.scrollHeight;
         return 'page-view';
       }
+      // 有些页面是内部容器滚动（如分析报告的 an-body），优先滚最高的那个
+      const candidates = [...document.querySelectorAll('div, section, main')].filter((node) => {
+        const style = getComputedStyle(node);
+        return /(auto|scroll)/.test(style.overflowY)
+          && node.scrollHeight > node.clientHeight + 8
+          && node.clientHeight > 200;
+      }).sort((a, b) => b.scrollHeight - a.scrollHeight);
+      if (candidates[0]) {
+        candidates[0].scrollTop = candidates[0].scrollHeight;
+        return candidates[0].className || candidates[0].tagName;
+      }
       window.scrollTo(0, document.body.scrollHeight);
       return 'window';
     })()`);
+    console.log(`  已滚动到底: ${scrolledTo}`);
     await sleep(500);
   }
 
