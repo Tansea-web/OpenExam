@@ -157,6 +157,8 @@ contextBridge.exposeInMainWorld("openexam", {
       ipcRenderer.invoke("ai:generatePaper", { settings, config }),
     gradeEssay: (settings, payload) =>
       ipcRenderer.invoke("ai:gradeEssay", { settings, payload }),
+    gradeSubjective: (settings, payload) =>
+      ipcRenderer.invoke("ai:gradeSubjective", { settings, payload }),
     recognizeEssay: (settings, imageBase64, mimeType) =>
       ipcRenderer.invoke("ai:recognizeEssay", { settings, imageBase64, mimeType }),
     analyzeWrongCause: (settings, payload) =>

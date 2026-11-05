@@ -1116,6 +1116,99 @@ async function gradeEssay(settings, payload) {
   }
 }
 
+// ─── 通用主观题批改（简答 / 论述 / 案例 / 写作）──────────────────────────────
+const SUBJECTIVE_GRADER_SYSTEM = buildSystem(
+  '你是通用主观题阅卷老师，适用于简答、论述、案例分析、写作等题型。依据题干、参考答案和评分点给分，不臆造要求、不遗漏采分点。只输出 JSON。'
+);
+
+function buildSubjectiveGradePrompt(payload = {}) {
+  const content = String(payload.content || '').trim();
+  const answer = String(payload.userAnswer || '').trim();
+  const reference = String(payload.referenceAnswer || '').trim();
+  const rubric = String(payload.rubric || '').trim();
+  const wordLimit = Number(payload.wordLimit) || 0;
+  const maxScore = Number(payload.maxScore) || 10;
+
+  return `请批改下面这份主观题作答。
+
+题干：
+${wrapUntrusted('题干', content)}
+${reference ? `\n参考答案：\n${wrapUntrusted('参考答案', reference)}` : ''}
+${rubric ? `\n评分点：\n${wrapUntrusted('评分点', rubric)}` : ''}
+${wordLimit > 0 ? `\n字数要求：不超过 ${wordLimit} 字。` : ''}
+
+考生作答：
+${wrapUntrusted('考生作答', answer)}
+
+按下面的 JSON 输出，不要输出多余文字：
+{
+  "score": 得分数字,
+  "maxScore": ${maxScore},
+  "wordCount": 作答字数,
+  "dimensions": [
+    {"name":"要点覆盖","score":数字,"max":数字,"comment":"一句话点评"},
+    {"name":"逻辑结构","score":数字,"max":数字,"comment":"..."},
+    {"name":"表达规范","score":数字,"max":数字,"comment":"..."}
+  ],
+  "points": [
+    {"text":"采分点","hit":true或false,"evidence":"考生原文","why":"漏掉时说明为什么该写"}
+  ],
+  "summary": "整体评价，两三句话",
+  "improvements": ["下次要注意的具体动作，两到四条"]
+}
+
+评分以要点覆盖为主；没有参考答案时按通用标准给分。`;
+}
+
+function pickScore(value, fallback = 0) {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : fallback;
+}
+
+function normalizeSubjectiveReview(raw = {}) {
+  const maxScore = Math.max(1, pickScore(raw.maxScore, 10));
+  return {
+    score: Math.max(0, Math.min(maxScore, pickScore(raw.score, 0))),
+    maxScore,
+    wordCount: Math.max(0, pickScore(raw.wordCount, 0)),
+    dimensions: (Array.isArray(raw.dimensions) ? raw.dimensions : []).slice(0, 6).map((item) => ({
+      name: String(item?.name || ''),
+      score: pickScore(item?.score, 0),
+      max: pickScore(item?.max, 0),
+      comment: String(item?.comment || ''),
+    })),
+    points: (Array.isArray(raw.points) ? raw.points : []).slice(0, 20).map((item) => ({
+      text: String(item?.text || ''),
+      hit: Boolean(item?.hit),
+      evidence: String(item?.evidence || ''),
+      why: String(item?.why || ''),
+    })),
+    summary: String(raw.summary || ''),
+    improvements: (Array.isArray(raw.improvements) ? raw.improvements : []).slice(0, 5).map(String),
+    provider: 'ai',
+  };
+}
+
+async function gradeSubjective(settings, payload = {}) {
+  const answer = String(payload.userAnswer || '').trim();
+  if (!answer) return { success: false, error: '没有作答内容' };
+  try {
+    const text = await callModelForJSON(
+      settings,
+      SUBJECTIVE_GRADER_SYSTEM,
+      buildSubjectiveGradePrompt(payload),
+      3072
+    );
+    const parsed = extractJSONObject(text);
+    if (!parsed) {
+      return { success: false, error: '模型没有返回可解析的批改结果，请重试' };
+    }
+    return { success: true, review: normalizeSubjectiveReview(parsed) };
+  } catch (error) {
+    return { success: false, error: compactError(error) };
+  }
+}
+
 const ESSAY_OCR_SYSTEM = buildSystem(`你是申论真题录入助手。从图片里原样提取给定材料和题目，不要改写、不要总结、不要补充。只输出 JSON。`);
 
 /** 从图片里扒出申论题：材料 / 题干 / 要求 / 字数 */
@@ -1363,6 +1456,7 @@ async function analyzeWrongCause(settings, payload = {}) {
 module.exports = {
   recognizeQuestions,
   gradeEssay,
+  gradeSubjective,
   recognizeEssay,
   analyzeWrongCause,
   createVariantQuestion,

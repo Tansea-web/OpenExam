@@ -523,6 +523,10 @@ ipcMain.handle("ai:gradeEssay", async (event, { settings, payload }) => {
   return aiService.gradeEssay(database.resolveAISecrets(settings), payload || {});
 });
 
+ipcMain.handle("ai:gradeSubjective", async (event, { settings, payload }) => {
+  return aiService.gradeSubjective(database.resolveAISecrets(settings), payload || {});
+});
+
 ipcMain.handle("ai:recognizeEssay", async (event, { settings, imageBase64, mimeType }) => {
   return aiService.recognizeEssay(database.resolveAISecrets(settings), imageBase64, mimeType);
 });

@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import RichQuestionContent from '../components/RichQuestionContent.jsx';
 import { useDialog } from '../components/DialogProvider.jsx';
 import { getState } from '../store/examStore.js';
+import { gradeSubjectiveQuestion } from '../utils/subjectiveGrade.js';
+import { getAISettings } from '../store/aiSettings.js';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const CAT_NAMES = {
@@ -63,6 +65,9 @@ const formatAnswerForDisplay = (answer, type) => {
   }
   return String(answer || '').trim();
 };
+
+// 主观题（简答 / 论述 / 案例 / 写作）统一用 essay 类型
+const isSubjectiveType = (type) => String(type || '').trim().toLowerCase() === 'essay';
 
 const normalizeSavedAnswers = (rawAnswers, allQuestions = []) => {
   const normalized = {};
@@ -206,6 +211,7 @@ export default function ExamRoom({ paperId, questions: propQuestions, config, re
   const collectResultStats = (answerMap = answers) => {
     let correctCount = 0;
     let answeredCount = 0;
+    let objectiveCount = 0;
     const wrongQuestions = [];
     const reviewOutcomes = [];
     questions.forEach((q) => {
@@ -215,6 +221,9 @@ export default function ExamRoom({ paperId, questions: propQuestions, config, re
         return;
       }
       answeredCount++;
+      // 主观题不计对错，也不进错题本
+      if (isSubjectiveType(q.type)) return;
+      objectiveCount++;
       const correct = isCorrectAnswer(userAnswer, q.answer, q.type);
       if (correct) {
         correctCount++;
@@ -230,14 +239,15 @@ export default function ExamRoom({ paperId, questions: propQuestions, config, re
         if (isWrongRedo) reviewOutcomes.push({ questionId: q.id, outcome: 'again' });
       }
     });
-    return { correctCount, answeredCount, wrongQuestions, reviewOutcomes };
+    return { correctCount, answeredCount, objectiveCount, wrongQuestions, reviewOutcomes };
   };
 
   const persistProgress = async (status, answerMap = answers, elapsed = timeElapsed) => {
     if (!window.openexam?.db?.savePracticeRecord || !canPersist) return;
-    const { correctCount } = collectResultStats(answerMap);
-    const totalCount = questions.length;
-    const accuracy = totalCount > 0 ? Math.round((correctCount / totalCount) * 100) : 0;
+    const { correctCount, objectiveCount } = collectResultStats(answerMap);
+    // 正确率只统计客观题，主观题由评分单独记录
+    const totalCount = objectiveCount;
+    const accuracy = objectiveCount > 0 ? Math.round((correctCount / objectiveCount) * 100) : 0;
     await window.openexam.db.savePracticeRecord({
       id: sessionId,
       paperId: persistentPaperId,
@@ -292,19 +302,39 @@ export default function ExamRoom({ paperId, questions: propQuestions, config, re
   const goToQ  = i => { setCurrentIndex(i); setCardOpen(false); bodyRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); };
 
   const doSubmit = async (forced = false) => {
-    const { correctCount, answeredCount, wrongQuestions, reviewOutcomes } = collectResultStats();
+    const { correctCount, answeredCount, objectiveCount, wrongQuestions, reviewOutcomes } = collectResultStats();
     const unanswered = questions.length - answeredCount;
-    const accuracy = questions.length > 0 ? Math.round((correctCount / questions.length) * 100) : 0;
+    const accuracy = objectiveCount > 0 ? Math.round((correctCount / objectiveCount) * 100) : 0;
+
+    // 主观题：交卷时逐题批改（AI 优先，未配置时本地关键词评分）
+    const subjectiveQuestions = questions.filter(
+      (q) => isSubjectiveType(q.type) && isAnswered(answers[q.id], q.type)
+    );
+    let subjective = [];
+    if (subjectiveQuestions.length) {
+      const aiSettings = getAISettings();
+      subjective = await Promise.all(subjectiveQuestions.map(async (q) => ({
+        questionId: q.id,
+        content: q.content || '',
+        referenceAnswer: q.answer || '',
+        rubric: q.rubric || '',
+        userAnswer: String(answers[q.id] || ''),
+        review: await gradeSubjectiveQuestion({ question: q, userAnswer: answers[q.id], settings: aiSettings }),
+      })));
+    }
+
     const result = {
       totalCount: questions.length,
+      objectiveCount,
       correctCount,
-      wrongCount: answeredCount - correctCount,
+      wrongCount: Math.max(0, objectiveCount - correctCount),
       unanswered,
       accuracy,
       timeElapsed,
       answers,
       questions,
       config,
+      subjective,
       paperTitle: paper?.title || config?.title || '',
     };
     try {
@@ -407,6 +437,51 @@ export default function ExamRoom({ paperId, questions: propQuestions, config, re
     palette: CAT_COLORS[cat] || CAT_COLORS.default,
   }));
 
+  // ── 主观题作答 ──
+  const handleSubjectiveChange = (value) => {
+    if (!currentQuestion) return;
+    setAnswers((prev) => {
+      const next = { ...prev };
+      if (String(value || '').trim()) next[currentQuestion.id] = value;
+      else delete next[currentQuestion.id];
+      return next;
+    });
+  };
+
+  const renderSubjective = () => {
+    const value = String(answers[currentQuestion.id] || '');
+    const limit = Number(currentQuestion.word_limit || currentQuestion.wordLimit) || 0;
+    const chars = value.replace(/\s/g, '').length;
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <textarea
+          value={value}
+          onChange={(event) => handleSubjectiveChange(event.target.value)}
+          placeholder={limit > 0 ? `在这里作答，建议不超过 ${limit} 字` : '在这里作答'}
+          rows={isMockMode ? 10 : 8}
+          style={{
+            width: '100%',
+            minHeight: 170,
+            resize: 'vertical',
+            padding: '12px 14px',
+            borderRadius: 10,
+            border: '1px solid var(--line)',
+            background: 'var(--surface)',
+            color: 'var(--text)',
+            fontSize: 13,
+            lineHeight: 1.75,
+            fontFamily: 'inherit',
+            boxSizing: 'border-box',
+          }}
+        />
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 11, color: 'var(--muted)' }}>
+          <span>交卷后由 AI 批改；未配置 AI 时按评分点做本地估算</span>
+          <span style={{ whiteSpace: 'nowrap' }}>{chars}{limit > 0 ? ` / ${limit}` : ''} 字</span>
+        </div>
+      </div>
+    );
+  };
+
   // ── Option rendering ──
   const renderOptions = () => (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
@@ -442,9 +517,32 @@ export default function ExamRoom({ paperId, questions: propQuestions, config, re
     </div>
   );
 
+  // ── 主观题：练习态只提示，交卷后统一批改 ──
+  const renderSubjectiveAnalysis = () => {
+    if (isMockMode) return null;
+    const answerText = String(answers[currentQuestion.id] || '').trim();
+    if (!answerText) return null;
+    return (
+      <div style={{ marginTop: 20, padding: '16px 18px', background: 'var(--accent-soft-bg)', borderRadius: 10, border: '1px solid var(--accent-border-soft)' }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', marginBottom: 8 }}>主观题：交卷后统一批改</div>
+        {currentQuestion.answer && (
+          <div style={{ fontSize: 12, lineHeight: 1.75, color: 'var(--muted)', marginBottom: 6 }}>
+            参考答案：{currentQuestion.answer}
+          </div>
+        )}
+        {(currentQuestion.analysis_html || currentQuestion.analysis) && (
+          <div style={{ fontSize: 12, lineHeight: 1.75, color: 'var(--muted)' }}>
+            <RichQuestionContent value={currentQuestion.analysis_html || currentQuestion.analysis} className="rich-question-analysis" />
+          </div>
+        )}
+      </div>
+    );
+  };
+
   // ── Analysis card ──
   const renderAnalysis = () => {
     if (isMockMode) return null;
+    if (isSubjectiveType(currentQuestion.type)) return renderSubjectiveAnalysis();
     if (!isMemorizeMode && !(isAnswered(answers[currentQuestion.id], currentQuestion.type) && showAnalysis)) return null;
     const isRight = isCorrectAnswer(answers[currentQuestion.id], currentQuestion.answer, currentQuestion.type);
     return (
@@ -663,7 +761,11 @@ export default function ExamRoom({ paperId, questions: propQuestions, config, re
                   {currentQuestion.category ? (CAT_NAMES[currentQuestion.category] || currentQuestion.category) : '综合'}
                 </span>
                 <span style={{ fontSize: 10, color: 'var(--muted)', padding: '2px 7px', borderRadius: 5, background: 'var(--neutral-soft-bg)' }}>
-                  {currentQuestion.type === 'single' ? '单选题' : '多选题'}
+                  {isSubjectiveType(currentQuestion.type)
+                    ? '主观题'
+                    : currentQuestion.type === 'single' || currentQuestion.type === 'judge'
+                      ? '单选题'
+                      : '多选题'}
                 </span>
                 {/* Difficulty dots if available */}
                 {currentQuestion.difficulty && (
@@ -698,9 +800,12 @@ export default function ExamRoom({ paperId, questions: propQuestions, config, re
             {/* ── OPTIONS ── */}
             <div style={{ marginBottom: 4, flexShrink: 0 }}>
               <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.8px', marginBottom: 9 }}>
-                作答区域 {currentQuestion.type !== 'single' && <span style={{ color: catPalette.color }}>（可多选）</span>}
+                作答区域
+                {isSubjectiveType(currentQuestion.type)
+                  ? <span style={{ color: 'var(--accent)' }}>（主观题）</span>
+                  : currentQuestion.type === 'multiple' && <span style={{ color: catPalette.color }}>（可多选）</span>}
               </div>
-              {renderOptions()}
+              {isSubjectiveType(currentQuestion.type) ? renderSubjective() : renderOptions()}
             </div>
 
             {/* ── ANALYSIS ── */}

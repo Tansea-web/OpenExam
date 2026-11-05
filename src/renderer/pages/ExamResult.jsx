@@ -170,17 +170,19 @@ export default function ExamResult({ result, onBack, onRedoWrong, onPracticeWeak
     return { text: '需加强', color: 'var(--danger)', bg: 'var(--danger-soft)' };
   };
 
+  const isSubjectiveType = (type) => String(type || '').trim().toLowerCase() === 'essay';
+  const subjective = Array.isArray(result?.subjective) ? result.subjective : [];
+  const objectiveQuestions = questions.filter((q) => !isSubjectiveType(q.type));
+  const objectiveCount = objectiveQuestions.length || (result?.objectiveCount ?? 0);
   const totalCount = result?.totalCount || questions.length;
-  const correctCount = result?.correctCount || Object.keys(answers).filter(id => {
-    const q = questions.find(item => item.id === id);
-    return q && isCorrectAnswer(answers[id], q.answer, q.type);
-  }).length;
+  const correctCount = result?.correctCount || objectiveQuestions.filter((q) => isCorrectAnswer(answers[q.id], q.answer, q.type)).length;
   const answeredCount = questions.filter(q => isAnswered(answers[q.id], q.type)).length;
   const unansweredCount = result?.unanswered ?? Math.max(totalCount - answeredCount, 0);
-  const accuracy = totalCount > 0 ? Math.round((correctCount / totalCount) * 100) : 0;
+  // 正确率只统计客观题，主观题单独按得分展示
+  const accuracy = objectiveCount > 0 ? Math.round((correctCount / objectiveCount) * 100) : 0;
   const timeElapsed = result?.timeElapsed || result?.duration || 0;
   const avgTimePerQuestion = totalCount > 0 ? Math.round(timeElapsed / totalCount) : 0;
-  const wrongCount = result?.wrongCount ?? Math.max(answeredCount - correctCount, 0);
+  const wrongCount = result?.wrongCount ?? Math.max(objectiveCount - correctCount, 0);
 
   const level = getScoreLevel(accuracy);
   const resultTitle = result?.paperTitle || result?.config?.title || (result?.config?.category ? categoryNames[result.config.category] || '专项练习' : '练习完成');
@@ -453,6 +455,63 @@ export default function ExamResult({ result, onBack, onRedoWrong, onPracticeWeak
                 <span className="strip-meta warning">{unansweredCount} 未答</span>
               </div>
             </div>
+
+            {subjective.length > 0 && (
+              <section className="board-section" style={{ marginTop: 14 }}>
+                <div className="section-heading">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2">
+                    <path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/>
+                  </svg>
+                  <span>主观题批改</span>
+                  <span className="heading-badge" style={{ color: 'var(--muted)' }}>{subjective.length} 题</span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '4px 0 2px' }}>
+                  {subjective.map((item, index) => {
+                    const review = item.review || {};
+                    const score = Number(review.score) || 0;
+                    const maxScore = Number(review.maxScore) || 10;
+                    const pct = maxScore > 0 ? Math.min(100, Math.round((score / maxScore) * 100)) : 0;
+                    const good = pct >= 60;
+                    return (
+                      <div key={item.questionId || index} style={{ border: '1px solid var(--line)', borderRadius: 12, padding: '12px 14px', background: 'var(--surface)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 8 }}>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {index + 1}. {String(item.content || '主观题').slice(0, 42)}
+                          </span>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: good ? 'var(--success)' : 'var(--danger)', whiteSpace: 'nowrap' }}>
+                            {score}/{maxScore}
+                          </span>
+                        </div>
+                        <div style={{ height: 5, borderRadius: 10, background: 'var(--neutral-soft-bg)', overflow: 'hidden', marginBottom: 10 }}>
+                          <div style={{ width: `${pct}%`, height: '100%', borderRadius: 10, background: good ? 'var(--success)' : 'var(--warning)' }} />
+                        </div>
+                        {(review.dimensions || []).map((dim) => (
+                          <div key={dim.name} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>
+                            <span>{dim.name}</span>
+                            <span style={{ textAlign: 'right' }}>{dim.score}/{dim.max}{dim.comment ? ` · ${dim.comment}` : ''}</span>
+                          </div>
+                        ))}
+                        {Array.isArray(review.points) && review.points.length > 0 && (
+                          <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                            {review.points.map((point, idx) => (
+                              <span key={idx} style={{ fontSize: 11, color: point.hit ? 'var(--success)' : 'var(--muted)' }}>
+                                {point.hit ? '✓' : '○'} {point.text}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {review.summary && (
+                          <div style={{ marginTop: 8, fontSize: 11, color: 'var(--muted)', lineHeight: 1.6 }}>{review.summary}</div>
+                        )}
+                        <div style={{ marginTop: 6, fontSize: 10, color: 'var(--muted)' }}>
+                          {review.provider === 'ai' ? 'AI 批改' : '本地评分'}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
 
             <div className="result-main-row">
               <section className="board-section section-trend">

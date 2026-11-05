@@ -334,6 +334,9 @@ function ensureQuestionsSchema() {
     ['material_html', 'TEXT'],
     ['material_group_id', 'TEXT'],
     ['quality_flag', 'TEXT'],
+    // 主观题评分点与字数要求
+    ['rubric', 'TEXT'],
+    ['word_limit', 'INTEGER DEFAULT 0'],
   ];
 
   additions.forEach(([name, definition]) => {
@@ -393,6 +396,8 @@ function initDatabase() {
       answer TEXT NOT NULL,
       analysis TEXT,
       analysis_html TEXT,
+      rubric TEXT,
+      word_limit INTEGER DEFAULT 0,
       difficulty INTEGER DEFAULT 2,
       tags TEXT,
       quality_flag TEXT,
@@ -1146,8 +1151,12 @@ function getPracticeStats() {
   };
 }
 
+// 主观题：统一归一为 essay（兼容申论与各类简答/案例/写作）
+const SUBJECTIVE_TYPE_ALIASES = new Set(['essay', 'subjective', 'short_answer', 'case', 'case_analysis', 'writing']);
+
 function normalizeQuestionType(type) {
   const value = String(type || '').toLowerCase();
+  if (SUBJECTIVE_TYPE_ALIASES.has(value)) return 'essay';
   if (['single', 'multiple', 'judge'].includes(value)) return value;
   return 'single';
 }
@@ -1206,8 +1215,8 @@ function savePaperBundle(paperData = {}, questions = [], fallbackType = 'importe
   `);
 
   const insertQuestion = db.prepare(`
-    INSERT INTO questions (id, paper_id, order_num, type, category, sub_category, content, content_html, options, answer, analysis, analysis_html, difficulty, tags, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    INSERT INTO questions (id, paper_id, order_num, type, category, sub_category, content, content_html, options, answer, analysis, analysis_html, rubric, word_limit, difficulty, tags, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
   `);
 
   const saveTransaction = db.transaction(() => {
@@ -1226,6 +1235,7 @@ function savePaperBundle(paperData = {}, questions = [], fallbackType = 'importe
     normalizedQuestions.forEach((q, index) => {
       const questionId = `q_${Date.now()}_${index}`;
       const options = normalizeQuestionOptions(q.options);
+      const questionType = normalizeQuestionType(q.type);
       const content = String(q.content || '');
       const contentHtml = String(q.contentHtml || q.content_html || '');
       const analysisHtml = String(q.analysisHtml || q.analysis_html || '');
@@ -1238,15 +1248,18 @@ function savePaperBundle(paperData = {}, questions = [], fallbackType = 'importe
         questionId,
         paperId,
         index + 1,
-        normalizeQuestionType(q.type),
+        questionType,
         taxonomy.category,
         taxonomy.subCategory,
         content,
         contentHtml || null,
         JSON.stringify(options),
-        String(q.answer || '').trim().toUpperCase(),
+        // 主观题的答案是参考答案文本，不能大写化
+        questionType === 'essay' ? String(q.answer || '').trim() : String(q.answer || '').trim().toUpperCase(),
         q.analysis || '',
         analysisHtml || null,
+        questionType === 'essay' ? (String(q.rubric || q.scoringPoints || '').trim() || null) : null,
+        questionType === 'essay' ? Math.max(0, Number(q.wordLimit || q.word_limit) || 0) : 0,
         Math.max(1, Math.min(5, Number(q.difficulty) || difficulty || 2)),
         normalizeQuestionTags(q.tags)
       );
@@ -1286,6 +1299,12 @@ function exportQuestionPack(options = {}) {
       category: row.category || '',
       subCategory: row.sub_category || '',
       type: row.type || 'single',
+      ...(row.type === 'essay'
+        ? {
+            rubric: row.rubric || '',
+            wordLimit: Number(row.word_limit) || 0,
+          }
+        : {}),
     }));
     packPapers.push({
       id: paper.id,

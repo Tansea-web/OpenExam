@@ -24,6 +24,17 @@ const MAX_SUBJECTS = 60;
 const MAX_CATEGORIES = 300;
 const KEY_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
+// 主观题：统一用 essay 作为类型 key，兼容常见别名
+const SUBJECTIVE_TYPE = 'essay';
+const SUBJECTIVE_ALIASES = new Set(['essay', 'subjective', 'short_answer', 'case', 'case_analysis', 'writing']);
+
+function normalizeTypeKey(value) {
+  const key = String(value || '').trim().toLowerCase();
+  if (SUBJECTIVE_ALIASES.has(key)) return SUBJECTIVE_TYPE;
+  if (['single', 'multiple', 'judge'].includes(key)) return key;
+  return 'single';
+}
+
 function isPlainObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
@@ -59,8 +70,13 @@ function normalizeOptions(options) {
 
 function normalizeQuestion(raw, index) {
   const source = isPlainObject(raw) ? raw : {};
+  const type = normalizeTypeKey(source.type);
+  const isSubjective = type === SUBJECTIVE_TYPE;
   const options = normalizeOptions(source.options);
-  const answer = String(source.answer || '').trim().toUpperCase();
+  // 主观题的答案是一段参考答案，不能大写化
+  const answer = isSubjective
+    ? String(source.answer || '').trim()
+    : String(source.answer || '').trim().toUpperCase();
   return {
     id: String(source.id || `q_${index + 1}`),
     content: String(source.content || source.stem || '').trim(),
@@ -69,7 +85,14 @@ function normalizeQuestion(raw, index) {
     analysis: String(source.analysis || '').trim(),
     category: String(source.category || '').trim(),
     subCategory: String(source.subCategory || source.sub_category || '').trim(),
-    type: String(source.type || 'single').trim(),
+    type,
+    // 主观题评分点 / 字数要求，客观题为空
+    ...(isSubjective
+      ? {
+          rubric: String(source.rubric || source.scoringPoints || '').trim(),
+          wordLimit: Number(source.wordLimit || source.word_limit) || 0,
+        }
+      : {}),
   };
 }
 
@@ -278,10 +301,16 @@ function validatePack(input) {
     }
     const questions = (Array.isArray(paper.questions) ? paper.questions : [])
       .map((question, index) => normalizeQuestion(question, index))
-      .filter((question) => question.content && question.options.length >= 2);
+      .filter((question) => {
+        // 主观题：有题干即可，不要求选项
+        if (question.type === SUBJECTIVE_TYPE) return Boolean(question.content);
+        return question.content && question.options.length >= 2;
+      });
 
-    // 答案可以是单字母或多字母组合（多选）；只要每个字母都对应某个选项即为有效
+    // 客观题：答案可以是单字母或多字母组合（多选），每个字母都要对应某个选项；
+    // 主观题的答案是一段参考答案，不做字母校验
     const clean = questions.filter((question) => {
+      if (question.type === SUBJECTIVE_TYPE) return true;
       const optionKeys = new Set(question.options.map((option) => option.key));
       const answerKeys = String(question.answer || '').split('').filter((char) => /[A-Z]/.test(char));
       return answerKeys.length > 0 && answerKeys.every((key) => optionKeys.has(key));
@@ -323,6 +352,9 @@ function validatePack(input) {
 module.exports = {
   PACK_VERSION,
   MAX_QUESTIONS,
+  SUBJECTIVE_TYPE,
+  SUBJECTIVE_ALIASES,
+  normalizeTypeKey,
   validatePack,
   normalizeQuestion,
   normalizeOptions,

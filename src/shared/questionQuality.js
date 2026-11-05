@@ -163,11 +163,19 @@ function hasUsableMaterial(question = {}) {
   return false;
 }
 
+const SUBJECTIVE_TYPES = new Set(['essay', 'subjective', 'short_answer', 'case', 'case_analysis', 'writing']);
+
+function isSubjectiveQuestion(question = {}) {
+  return SUBJECTIVE_TYPES.has(String(question.type || '').trim().toLowerCase());
+}
+
 function isPracticeableQuestion(question = {}) {
+  if (String(question.quality_flag || '').includes('exclude')) return false;
+  // 主观题：只要有题干就能作答，不要求选项与字母答案
+  if (isSubjectiveQuestion(question)) return Boolean(trimText(question.content));
   const options = parseOptions(question.options);
   if (!options.length) return false;
   if (!isAnswerCompatible(question.answer, options, question.type)) return false;
-  if (String(question.quality_flag || '').includes('exclude')) return false;
   if (question.category === 'ziliao' && !hasUsableMaterial(question)) return false;
   return true;
 }
@@ -209,6 +217,7 @@ module.exports = {
   htmlToPlainText,
   isAnswerCompatible,
   isPracticeableQuestion,
+  isSubjectiveQuestion,
   mathMlToPlainText,
   optionKeys,
   parseOptions,
