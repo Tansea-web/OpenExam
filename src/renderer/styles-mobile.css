@@ -207,9 +207,44 @@
     gap: 8px;
   }
 
+  /* 题型分布：环形图居中，图例改为两列紧凑网格，避免卡片被拉得过高 */
   .home-dist-body {
-    flex-wrap: wrap;
-    gap: 12px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+
+  .home-donut {
+    margin: 0 auto;
+  }
+
+  .home-dist-legend {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 14px;
+  }
+
+  .home-dist-legend-item > div {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .home-dist-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .home-dist-legend-item strong {
+    white-space: nowrap;
+  }
+
+  .home-dist-bar {
+    width: 16px;
   }
 
   /* ── 通用：长文本换行，禁止横向溢出 ── */
