@@ -210,6 +210,7 @@ export default function WrongBook({ onRedo, onAskAI, onVariant, subject = "", tr
           ].map((card, index, arr) => (
             <div
               key={card.label}
+              className="wrong-stat-item"
               style={{
                 padding: "4px 16px 4px 0",
                 borderRight: index < arr.length - 1 ? "1px solid var(--line)" : "none",
@@ -226,7 +227,7 @@ export default function WrongBook({ onRedo, onAskAI, onVariant, subject = "", tr
       </header>
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", gap: 14, flexWrap: "wrap", borderBottom: "1px solid var(--line)", paddingBottom: 0 }}>
+        <div className="wrong-filter-tabs" style={{ display: "flex", gap: 14, flexWrap: "wrap", borderBottom: "1px solid var(--line)", paddingBottom: 0 }}>
           {FILTERS.map((item) => (
             <button
               key={item.key}
@@ -247,7 +248,7 @@ export default function WrongBook({ onRedo, onAskAI, onVariant, subject = "", tr
               {item.label}
             </button>
           ))}
-          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", paddingBottom: 6 }}>
+          <div className="wrong-cause-filter" style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", paddingBottom: 6 }}>
             <span style={{ fontSize: 11, color: "var(--muted)" }}>错因</span>
             {[{ key: "all", label: "全部" }, { key: "unlabeled", label: `未标注${causeCounts.unlabeled ? ` ${causeCounts.unlabeled}` : ""}` }]
               .concat(WRONG_CAUSES.filter((item) => causeCounts[item.key]).map((item) => ({ key: item.key, label: `${item.label} ${causeCounts[item.key]}`, color: item.color })))

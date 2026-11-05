@@ -228,6 +228,24 @@
     text-align: center;
   }
 
+  /* 错题本：顶部统计居中 */
+  .wrong-stat-item {
+    align-items: center;
+    text-align: center;
+    padding: 4px 8px !important;
+  }
+
+  /* 错题本：错因筛选换到标签行的下一行 */
+  .wrong-filter-tabs {
+    width: 100%;
+  }
+
+  .wrong-cause-filter {
+    margin-left: 0 !important;
+    width: 100%;
+    margin-top: 8px;
+  }
+
   /* ── 触控目标 ≥44px ── */
   .summary-btn,
   .practice-module-header,
