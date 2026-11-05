@@ -301,6 +301,7 @@ function createBridge(database, trackConfig, questionPack, ctx) {
     onChatStreamEvent: () => () => {},
     generatePaper: unsupported('AI 出卷'),
     gradeEssay: unsupported('AI 批改'),
+    gradeSubjective: unsupported('AI 批改'),
     recognizeEssay: unsupported('AI 识别'),
     analyzeWrongCause: unsupported('AI 归因'),
     createVariant: unsupported('AI 变式'),
