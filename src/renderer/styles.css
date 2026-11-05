@@ -7829,7 +7829,7 @@ button {
 }
 
 /* 题型分布移到右侧窄栏后，环形图与图例收紧（仅桌面两栏布局，移动端仍用大环） */
-@media (min-width: 769px) {
+@media (min-width: 1025px) {
   .home-side .home-dist-body { gap: 10px; }
   .home-side .home-donut { width: 78px; height: 78px; }
   .home-side .home-donut-inner { width: 54px; height: 54px; }
