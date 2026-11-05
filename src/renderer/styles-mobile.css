@@ -111,10 +111,35 @@
   .header-actions {
     order: 2;
     margin-left: auto;
-    gap: 8px;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
 
-  .header-track,
+  /* 目标切换必须可见：放在操作组最前，压缩用户名与标签腾空间 */
+  .header-track {
+    display: inline-flex !important;
+    flex: 0 0 auto;
+    order: -1;
+    min-height: 32px;
+  }
+
+  .header-track-label {
+    display: none;
+  }
+
+  .header-track .oe-select {
+    width: 88px !important;
+    min-width: 88px !important;
+  }
+
+  .header-track .oe-select-value {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .user-name,
   .search,
   .header-divider {
     display: none !important;

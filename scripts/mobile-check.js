@@ -115,6 +115,10 @@ const goExam = async (win) => {
 
 const PAGES = {
   home: { label: '首页/今日', goto: (win) => clickText(win, '今日', '.tab') },
+  trackopen: {
+    label: '目标切换下拉',
+    goto: (win) => click(win, '.header-track .oe-select-trigger'),
+  },
   practice: { label: '题库练习', goto: openPractice },
   wrong: { label: '错题本', goto: (win) => click(win, '.rail-icon.wrong-book') },
   analytics: { label: '分析报告', goto: (win) => click(win, '.rail-icon.analytics') },
@@ -223,7 +227,7 @@ const PAGES = {
   },
 };
 
-const ALL_ORDER = ['home', 'notify', 'usermenu', 'practice', 'configmodal', 'wrong', 'analytics', 'ai', 'center', 'papers', 'aigen', 'growth', 'settings', 'history', 'import', 'essay', 'tomomodal', 'exam', 'result'];
+const ALL_ORDER = ['home', 'trackopen', 'notify', 'usermenu', 'practice', 'configmodal', 'wrong', 'analytics', 'ai', 'center', 'papers', 'aigen', 'growth', 'settings', 'history', 'import', 'essay', 'tomomodal', 'exam', 'result'];
 
 // 找出超出视口左右的可见元素（弹层被裁切的典型症状）
 const auditOffscreen = (win) =>

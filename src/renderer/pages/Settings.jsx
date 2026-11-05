@@ -458,9 +458,15 @@ export default function Settings({ onBack, onTracksConfigChange, initialSection 
         return;
       }
       const failed = Array.isArray(result.failures) ? result.failures : [];
+      const synced = result.taxonomy || {};
+      const syncedParts = [
+        synced.tracks ? `${synced.tracks} 个目标` : '',
+        synced.subjects ? `${synced.subjects} 个科目` : '',
+        synced.categories ? `${synced.categories} 个分类` : '',
+      ].filter(Boolean);
       await showAlert({
         title: '题库包导入完成',
-        message: `新增 ${result.importedPapers} 套试卷 / ${result.importedQuestions} 道题${failed.length ? `\n${failed.length} 套失败：${failed.slice(0, 2).join('；')}` : ''}`,
+        message: `新增 ${result.importedPapers} 套试卷 / ${result.importedQuestions} 道题${syncedParts.length ? `\n自动补齐配置：${syncedParts.join(' / ')}` : ''}${failed.length ? `\n${failed.length} 套失败：${failed.slice(0, 2).join('；')}` : ''}`,
         tone: 'success',
       });
     } catch (error) {

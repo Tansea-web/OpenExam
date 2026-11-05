@@ -548,12 +548,15 @@ ipcMain.handle("pack:exportToFile", async (event, { subject } = {}) => {
     const data = database.exportQuestionPack({ subject });
     if (!data.paperCount) return { success: false, error: "该范围下没有可导出的试卷" };
 
+    // 带上这些试卷用到的目标 / 科目 / 分类，接收方无需手动创建
+    const taxonomy = questionPack.buildTaxonomy(data.papers, trackConfig);
     const pack = {
       schemaVersion: questionPack.PACK_VERSION,
       exportedAt: new Date().toISOString(),
       app: { name: "OpenExam", version: app.getVersion() },
       scope: { subject: String(subject || ""), label: subject ? "单科目" : "全部题库" },
       papers: data.papers,
+      ...(taxonomy ? { taxonomy } : {}),
     };
 
     const stamp = new Date().toISOString().slice(0, 10);
@@ -598,8 +601,10 @@ ipcMain.handle("pack:importFromFile", async () => {
       return { success: false, error: checked.errors.slice(0, 3).join("；"), errors: checked.errors };
     }
 
+    // 先补齐目标/科目/分类，题目分类归一化才有词表可用
+    const taxonomy = questionPack.applyTaxonomy(checked.pack, trackConfig);
     const result = database.importQuestionPack(checked.pack);
-    return { success: result.importedPapers > 0, filePath: target.filePaths[0], ...result };
+    return { success: result.importedPapers > 0, filePath: target.filePaths[0], ...result, taxonomy };
   } catch (error) {
     return { success: false, error: error.message };
   }

@@ -330,9 +330,12 @@ function createBridge(database, trackConfig, questionPack, ctx) {
         if (!checked.valid) {
           return { success: false, error: checked.errors.slice(0, 3).join('；'), errors: checked.errors };
         }
+        // 先补齐目标 / 科目 / 分类，题目分类归一化才有词表可用
+        const taxonomy = questionPack.applyTaxonomy(checked.pack, trackConfig);
         const result = call('importQuestionPack', checked.pack);
         await ctx.saveBank();
-        return { success: result.importedPapers > 0, ...result };
+        await ctx.flushUser();
+        return { success: result.importedPapers > 0, ...result, taxonomy };
       },
       async importFromFile() {
         const file = await pickJsonFile();
@@ -351,6 +354,9 @@ function createBridge(database, trackConfig, questionPack, ctx) {
           app: { name: 'OpenExam', version: '0.3.0' },
           scope: { subject, label: subject ? '单科目' : '全部题库' },
           papers: data.papers,
+          ...(questionPack.buildTaxonomy(data.papers, trackConfig)
+            ? { taxonomy: questionPack.buildTaxonomy(data.papers, trackConfig) }
+            : {}),
         };
         downloadJson(`openexam-pack-${new Date().toISOString().slice(0, 10)}.json`, pack);
         return { success: true, paperCount: data.paperCount, questionCount: data.questionCount };
@@ -403,6 +409,12 @@ export async function initWebBridge() {
   };
   ctx.markDirty = scheduleSave;
   ctx.saveBank = saveBank;
+  ctx.flushUser = async () => {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = null;
+    saving = false;
+    await flush();
+  };
 
   const module = await import('./generated/database.js');
   const { database, trackConfig, questionPack } = module.default || module;

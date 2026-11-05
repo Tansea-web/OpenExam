@@ -20,7 +20,15 @@ function copyDirectory(from, to) {
   }
 }
 
-fs.rmSync(OUT, { recursive: true, force: true });
+// 不用整目录 rmSync：Windows 回收站/安全删除守卫可能拦截，只逐文件清理旧产物
+const staleDataDir = path.join(OUT, 'data');
+if (fs.existsSync(staleDataDir)) {
+  for (const entry of fs.readdirSync(staleDataDir)) {
+    const target = path.join(staleDataDir, entry);
+    if (fs.statSync(target).isFile()) fs.unlinkSync(target);
+  }
+  fs.rmdirSync(staleDataDir);
+}
 copyDirectory(PUBLIC_SRC, OUT);
 
 // 题库不再随包分发：首屏只初始化空库，题目由「导入题库包」按需载入

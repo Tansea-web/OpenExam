@@ -27,7 +27,10 @@ export default function CustomSelect({
     if (!trigger) return;
     const rect = trigger.getBoundingClientRect();
     const maxWidth = Math.min(420, window.innerWidth - 16);
-    const width = Math.min(Math.max(rect.width, compact ? minWidth : rect.width), maxWidth);
+    // 窄屏下 compact 触发器只有 ~90px，菜单跟着变窄会挤成竖排，这里给一个最小宽度
+    const narrow = window.innerWidth <= 768;
+    const compactMin = narrow ? Math.max(minWidth, 200) : minWidth;
+    const width = Math.min(Math.max(rect.width, compact ? compactMin : rect.width), maxWidth);
     const spaceBelow = window.innerHeight - rect.bottom - 8;
     const spaceAbove = rect.top - 8;
     const preferBelow = spaceBelow >= 160 || spaceBelow >= spaceAbove;
