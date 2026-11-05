@@ -170,13 +170,28 @@
     gap: 8px;
   }
 
-  /* 首页右侧栏隐藏后，page-view 仍留着 300px 空列，这里收成单列 */
+  /* 首页/成长页：单列 + 整页纵向滚动，右侧栏改为堆叠在下方而不是丢弃 */
   .workspace-body > .page-view {
     grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+    overflow-y: auto;
+  }
+
+  .page-view > .main-panel.home-main {
+    height: auto;
+    overflow: visible;
+  }
+
+  /* 成长页根节点是内联 height:100%/overflow:hidden，必须 !important 才能撑开整页 */
+  .page-view > .main-panel.growth-page {
+    height: auto !important;
+    overflow: visible !important;
   }
 
   .side-panel.home-side {
-    display: none;
+    display: flex;
+    height: auto;
+    overflow: visible;
   }
 
   /* ── 触控目标 ≥44px ── */
@@ -583,7 +598,8 @@
 @media (max-width: 768px) {
   .growth-body {
     flex-direction: column;
-    overflow-y: auto;
+    flex: 0 0 auto !important;
+    overflow: visible !important;
   }
 
   .growth-aside {

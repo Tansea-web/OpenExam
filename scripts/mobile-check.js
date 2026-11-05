@@ -22,13 +22,14 @@ require(path.join(__dirname, '..', 'main.js'));
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const opt = { page: 'all', width: 390, height: 844, hold: false, out: '', beat: 1200 };
+const opt = { page: 'all', width: 390, height: 844, hold: false, out: '', beat: 1200, scroll: '' };
 for (const item of process.argv.slice(2)) {
   if (!item.startsWith('--')) continue;
   const [key, value = ''] = item.slice(2).split('=');
   if (key === 'hold') opt.hold = true;
   else if (key === 'page') opt.page = value || 'all';
   else if (key === 'out') opt.out = value;
+  else if (key === 'scroll') opt.scroll = value;
   else if (key === 'beat') opt.beat = Number(value) || opt.beat;
   else if (key === 'size') {
     const [w, h] = value.split('x').map(Number);
@@ -273,7 +274,20 @@ const openPage = async (win, name) => {
     warnings.push(`${name}: ${offscreen.length} 个元素越界`);
   }
 
-  await shot(win, name);
+  if (opt.scroll === 'bottom') {
+    await win.webContents.executeJavaScript(`(() => {
+      const pv = document.querySelector('.page-view');
+      if (pv && pv.scrollHeight > pv.clientHeight + 4) {
+        pv.scrollTop = pv.scrollHeight;
+        return 'page-view';
+      }
+      window.scrollTo(0, document.body.scrollHeight);
+      return 'window';
+    })()`);
+    await sleep(500);
+  }
+
+  await shot(win, opt.scroll === 'bottom' ? `${name}-bottom` : name);
 };
 
 app.on('browser-window-created', (_event, win) => {

@@ -140,7 +140,7 @@ export default function GrowthCenter({ onOpenAchievements, onStartPractice }) {
   const detailAchievement = achievements.find(a => a.id === detailAchievementId) || null;
 
   return (
-    <section className="main-panel" style={{ padding: 0, display: "flex", flexDirection: "column", overflow: "hidden", height: "100%", boxSizing: "border-box" }}>
+    <section className="main-panel growth-page" style={{ padding: 0, display: "flex", flexDirection: "column", overflow: "hidden", height: "100%", boxSizing: "border-box" }}>
 
       {/* ── PAGE HEADER ── */}
       <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 22px 11px", borderBottom: "1px solid var(--line)", flexShrink: 0 }}>
