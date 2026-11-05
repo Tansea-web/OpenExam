@@ -198,7 +198,6 @@ export default function WrongBook({ onRedo, onAskAI, onVariant, subject = "", tr
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <button type="button" onClick={focusDue} className="primary-btn" style={{ padding: "8px 14px", borderRadius: 8 }}>开始今日复习</button>
             <button type="button" onClick={() => startRedo()} style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid var(--line)", background: "transparent", color: "var(--text)", fontWeight: 600, cursor: "pointer" }}>按筛选开练</button>
-            <button type="button" onClick={loadList} style={{ padding: "8px 14px", borderRadius: 8, border: "none", background: "transparent", color: "var(--muted)", fontWeight: 600, cursor: "pointer" }}>刷新</button>
           </div>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 0 }}>
