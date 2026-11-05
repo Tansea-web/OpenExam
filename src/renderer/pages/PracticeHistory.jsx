@@ -160,7 +160,11 @@ export default function PracticeHistory({ onBack, onOpenRecord, subject = '', tr
         ) : (
           filtered.map((record, idx) => {
             const status = String(record.status || '').toLowerCase();
-            const ongoing = ['ongoing', 'paused'].includes(status);
+            const answeredCount = Object.keys(record.answers || {}).length;
+            // 没有作答的“暂停”记录不算可继续，避免点进去回到空白旧状态
+            const resumable = ['ongoing', 'paused'].includes(status) && answeredCount > 0;
+            const notStarted = ['ongoing', 'paused'].includes(status) && !resumable;
+            const ongoing = resumable;
             const title = record.meta?.title || record.paper_title || categoryNames[record.category] || record.category || '综合练习';
             // 主观题得分随练习记录一起保存
             const subjective = Array.isArray(record.meta?.subjective) ? record.meta.subjective : [];
@@ -204,7 +208,7 @@ export default function PracticeHistory({ onBack, onOpenRecord, subject = '', tr
                 </div>
                 <div className="hr-right">
                   <span className="hr-accuracy" style={{ color: ongoing ? 'var(--warning)' : (record.accuracy >= 60 ? 'var(--success)' : 'var(--danger)') }}>
-                    {ongoing ? '继续' : (subjective.length > 0 && !record.total_count ? '主观' : `${record.accuracy || 0}%`)}
+                    {ongoing ? '继续' : notStarted ? '未开始' : (subjective.length > 0 && !record.total_count ? '主观' : `${record.accuracy || 0}%`)}
                   </span>
                   <span className="hr-score">
                     {ongoing

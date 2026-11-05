@@ -831,9 +831,11 @@ export default function App() {
     if (!record) return;
     const status = String(record.status || '').toLowerCase();
     const meta = record.meta || {};
+    // 没有任何作答的“暂停”记录不能恢复，否则会回到空白旧状态，这里当作重新开始
+    const resumable = Object.keys(record.answers || {}).length > 0;
     if (['ongoing', 'paused'].includes(status)) {
       if (record.paper_id && !String(record.paper_id).startsWith('practice_') && !String(record.paper_id).startsWith('wrong_redo_')) {
-        await handleOpenPaper({ id: record.paper_id, title: record.paper_title, type: meta.mode === 'ai_practice' ? 'ai_practice' : undefined, resumeRecord: record }, 'history');
+        await handleOpenPaper({ id: record.paper_id, title: record.paper_title, type: meta.mode === 'ai_practice' ? 'ai_practice' : undefined, resumeRecord: resumable ? record : null }, 'history');
         return;
       }
       let questions = meta.questions || [];
@@ -857,7 +859,7 @@ export default function App() {
         sourcePaperId: record.paper_id || buildPracticeSessionKey(record.category || 'mixed', record.sub_category || 'all'),
         durationMinutes: meta.durationMinutes,
       });
-      setExamResumeRecord(record);
+      setExamResumeRecord(resumable ? record : null);
       setResultReturnPage('history');
       setPage('practice-exam');
       return;

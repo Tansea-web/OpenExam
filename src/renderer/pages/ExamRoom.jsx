@@ -391,7 +391,11 @@ export default function ExamRoom({ paperId, questions: propQuestions, config, re
     });
     if (!confirmed) return;
     if (canPersist) {
-      try { await persistProgress('paused'); } catch (err) { console.error('保存退出进度失败:', err); }
+      // 没有任何作答时不写暂存记录，否则会留下一条“空进度”，下次继续又回到这里
+      const answeredAny = Object.keys(answers).some((key) => String(answers[key] ?? '').trim());
+      if (answeredAny) {
+        try { await persistProgress('paused'); } catch (err) { console.error('保存退出进度失败:', err); }
+      }
     }
     onExit();
   };

@@ -476,6 +476,13 @@ function initDatabase() {
   ensureQuestionsSchema();
   normalizePaperProvinceData();
 
+  // 清理“点进去没作答就退出”留下的空暂存记录，避免「继续」回到空白旧记录
+  try {
+    db.prepare("DELETE FROM practice_records WHERE status = 'paused' AND (answers IS NULL OR TRIM(answers) IN ('', '{}'))").run();
+  } catch (error) {
+    // 清理失败不影响启动
+  }
+
   // 学习目标配置（目标 → 科目 → 分类），首次启动幂等写入内置三目标
   try {
     trackConfig.initTrackConfig(db);
