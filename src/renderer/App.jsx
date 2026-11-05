@@ -1190,14 +1190,13 @@ export default function App() {
                 {[
                   { key: "今日", label: "今日" },
                   { key: "学习中心", label: "学习中心" },
-                  { key: "题库练习", label: practiceTabLabel },
                   { key: "模拟考试", label: "模拟考试" },
                   { key: "AI出卷", label: "AI出卷" },
                   { key: "我的成长", label: "我的成长" },
                 ].map((tab) => (
                   <button
                     key={tab.key}
-                    className={`tab ${activeTab === tab.key ? "active" : ""}${tab.key === "题库练习" ? " tab-dup-rail" : ""}`}
+                    className={`tab ${activeTab === tab.key ? "active" : ""}`}
                     onClick={() => handleTabChange(tab.key)}
                   >
                     {tab.label}

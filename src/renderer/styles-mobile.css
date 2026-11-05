@@ -238,11 +238,6 @@
     border-right: none !important;
   }
 
-  /* 顶部 Tab 的「题库练习」与底部栏第一个图标重复，窄屏下隐藏 */
-  .tabs .tab-dup-rail {
-    display: none;
-  }
-
   /* 今日：日期与按钮一行，标题独占下一行，避免按钮挤占标题文字 */
   .today-head {
     display: grid;
