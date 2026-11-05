@@ -328,6 +328,13 @@ function saveTrack(input = {}) {
   const features = normalizeFeatures(input.features);
   const existing = db.prepare('SELECT builtin FROM study_tracks WHERE key = ?').get(key);
 
+  // 新目标默认排到最后，而不是插到最前；已有目标沿用传入的 sort
+  let sortValue = Number(input.sort);
+  if (!Number.isFinite(sortValue) || sortValue <= 0) {
+    const row = db.prepare('SELECT COALESCE(MAX(sort), 0) AS maxSort FROM study_tracks').get();
+    sortValue = (Number(row?.maxSort) || 0) + 10;
+  }
+
   db.prepare(`
     INSERT INTO study_tracks (key, label, short_label, features, sort, builtin, enabled)
     VALUES (@key, @label, @shortLabel, @features, @sort, 0, @enabled)
@@ -342,7 +349,7 @@ function saveTrack(input = {}) {
     label,
     shortLabel: String(input.shortLabel || label).trim() || label,
     features: JSON.stringify(features),
-    sort: Number(input.sort) || 0,
+    sort: sortValue,
     enabled: input.enabled === false ? 0 : 1,
   });
 

@@ -224,6 +224,43 @@ export default function TrackManager({ onChange }) {
     await runAction(`track-del:${track.key}`, () => db.deleteTrack(track.key), '删除失败');
   };
 
+  // 目标排序：与相邻项交换 sort，并把整张列表规整成 10 的倍数，避免同值导致顺序抖动
+  const moveTrack = async (track, direction) => {
+    const list = Array.isArray(data.tracks) ? [...data.tracks] : [];
+    const index = list.findIndex((item) => item.key === track.key);
+    const swapIndex = index + direction;
+    if (index < 0 || swapIndex < 0 || swapIndex >= list.length) return;
+
+    const ordered = list.map((item, idx) => ({ key: item.key, sort: (idx + 1) * 10 }));
+    // 交换「位置」而不是对象本身：只把两者 sort 值对调，否则 key→sort 映射不变
+    const swappedSort = ordered[index].sort;
+    ordered[index].sort = ordered[swapIndex].sort;
+    ordered[swapIndex].sort = swappedSort;
+
+    const busyKey = `track-move:${track.key}`;
+    setBusy(busyKey);
+    try {
+      for (const { key, sort } of ordered) {
+        const item = list.find((entry) => entry.key === key);
+        if (!item) continue;
+        await db.saveTrack({
+          key,
+          label: item.label,
+          shortLabel: item.shortLabel,
+          features: item.features,
+          enabled: item.enabled,
+          sort,
+        });
+      }
+      // refresh 内部会把最新配置回传给父组件，这里不要再无参调用 onChange
+      await refresh();
+    } catch (error) {
+      await dialog.alert({ title: '排序失败', message: error?.message || '请稍后重试', tone: 'warning' });
+    } finally {
+      setBusy('');
+    }
+  };
+
   const submitSubject = async () => {
     if (!subjectDraft) return;
     const label = subjectDraft.label.trim();
@@ -322,7 +359,7 @@ export default function TrackManager({ onChange }) {
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {data.tracks.map((track) => {
+        {data.tracks.map((track, trackIndex) => {
           const subjects = subjectsByTrack.get(track.key) || [];
           const totalQuestions = subjects.reduce((sum, subject) => sum + (subject.questionCount || 0), 0);
           const expanded = activeTrack === track.key;
@@ -345,7 +382,27 @@ export default function TrackManager({ onChange }) {
                     {subjects.length} 个科目 · {totalQuestions.toLocaleString()} 套试卷 · {track.features.length} 个模块
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <button
+                    type="button"
+                    style={{ ...ghostBtn, padding: '2px 8px', fontSize: 12, lineHeight: 1.4 }}
+                    disabled={trackIndex === 0 || busy === `track-move:${track.key}`}
+                    onClick={() => moveTrack(track, -1)}
+                    title="上移"
+                    aria-label="上移"
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    style={{ ...ghostBtn, padding: '2px 8px', fontSize: 12, lineHeight: 1.4 }}
+                    disabled={trackIndex === data.tracks.length - 1 || busy === `track-move:${track.key}`}
+                    onClick={() => moveTrack(track, 1)}
+                    title="下移"
+                    aria-label="下移"
+                  >
+                    ↓
+                  </button>
                   <button
                     type="button"
                     style={ghostBtn}
