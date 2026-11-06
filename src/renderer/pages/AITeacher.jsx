@@ -351,10 +351,10 @@ function QuestionRefCard({ data }) {
               })}
             </div>
           ) : null}
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 6, fontSize: 10 }}>
-            {data.userAnswer ? <span>我的答案：{data.userAnswer}</span> : null}
-            {data.correctAnswer ? <span>正确答案：{data.correctAnswer}</span> : null}
-          </div>
+          {/* 正确答案不展示：AI 会在回答里讲解，卡片只保留“我答了什么” */}
+          {data.userAnswer ? (
+            <div style={{ marginTop: 6, fontSize: 10 }}>我的答案：{data.userAnswer}</div>
+          ) : null}
         </div>
       )}
     </div>
