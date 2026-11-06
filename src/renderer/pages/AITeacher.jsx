@@ -211,7 +211,7 @@ function MsgContent({ content }) {
                       border: "1px solid var(--line)",
                       background: "var(--surface-soft)",
                       padding: "6px 8px",
-                      textAlign: "left",
+                      textAlign: "center",
                       fontWeight: 600,
                       whiteSpace: "nowrap",
                     }}
