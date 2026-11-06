@@ -465,6 +465,7 @@ function initDatabase() {
       session_id TEXT NOT NULL,
       role TEXT NOT NULL,
       content TEXT NOT NULL,
+      meta TEXT,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (session_id) REFERENCES ai_chat_sessions(id)
     );
@@ -475,6 +476,17 @@ function initDatabase() {
   ensureWrongQuestionsSchema();
   ensureQuestionsSchema();
   normalizePaperProvinceData();
+
+  // AI 消息附带题目引用等上下文
+  try {
+    const messageColumns = db.pragma('table_info(ai_chat_messages)');
+    if (Array.isArray(messageColumns) && messageColumns.length
+      && !messageColumns.some((column) => column.name === 'meta')) {
+      db.exec('ALTER TABLE ai_chat_messages ADD COLUMN meta TEXT');
+    }
+  } catch (error) {
+    // 迁移失败不影响启动
+  }
 
   // 清理“点进去没作答就退出”留下的空暂存记录，避免「继续」回到空白旧记录
   try {
@@ -2060,12 +2072,22 @@ function getAIChatMessages(sessionId, limit = 300) {
   const id = String(sessionId || '').trim();
   if (!id) return [];
   const count = Math.max(1, Math.min(2000, Number(limit) || 300));
-  return db.prepare(`
+  const rows = db.prepare(`
     SELECT * FROM ai_chat_messages
     WHERE session_id = ?
     ORDER BY created_at ASC, rowid ASC
     LIMIT ?
   `).all(id, count);
+
+  return rows.map((row) => {
+    let meta = null;
+    try {
+      meta = row.meta ? JSON.parse(row.meta) : null;
+    } catch (error) {
+      meta = null;
+    }
+    return { ...row, meta };
+  });
 }
 
 function addAIChatMessage(input = {}) {
@@ -2077,10 +2099,19 @@ function addAIChatMessage(input = {}) {
   if (!sessionId) throw new Error('sessionId 不能为空');
   if (!content) throw new Error('content 不能为空');
 
+  let meta = null;
+  if (input.meta && typeof input.meta === 'object') {
+    try {
+      meta = JSON.stringify(input.meta);
+    } catch (error) {
+      meta = null;
+    }
+  }
+
   db.prepare(`
-    INSERT INTO ai_chat_messages (id, session_id, role, content, created_at)
-    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-  `).run(id, sessionId, role, content);
+    INSERT INTO ai_chat_messages (id, session_id, role, content, meta, created_at)
+    VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+  `).run(id, sessionId, role, content, meta);
 
   db.prepare(`
     UPDATE ai_chat_sessions

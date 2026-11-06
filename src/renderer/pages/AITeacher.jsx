@@ -44,7 +44,11 @@ function normalizeMessages(rows) {
   const list = Array.isArray(rows) ? rows : [];
   const mapped = list
     .filter((row) => row && (row.role === "assistant" || row.role === "user"))
-    .map((row) => ({ role: row.role, content: String(row.content || "") }))
+    .map((row) => ({
+      role: row.role,
+      content: String(row.content || ""),
+      meta: row.meta && typeof row.meta === "object" ? row.meta : null,
+    }))
     .filter((row) => row.content.trim());
   return mapped.length ? mapped : [{ role: "assistant", content: DEFAULT_ASSISTANT_MESSAGE }];
 }
@@ -58,6 +62,30 @@ function readQuestionContext() {
   } catch (error) {
     return null;
   }
+}
+
+// 提问时保存的题目快照：只留展示需要的字段，控制体积
+function buildQuestionRef(context) {
+  if (!context) return null;
+  const content = String(context.content || "").replace(/<[^>]+>/g, "").trim();
+  if (!content && !context.questionId) return null;
+  return {
+    questionId: String(context.questionId || ""),
+    paperTitle: String(context.paperTitle || "").slice(0, 60),
+    index: Number(context.index) || 0,
+    total: Number(context.total) || 0,
+    category: String(context.category || ""),
+    subCategory: String(context.subCategory || ""),
+    content: content.slice(0, 200),
+    options: Array.isArray(context.options)
+      ? context.options.slice(0, 6).map((opt) => ({
+          key: String(opt.key || ""),
+          content: String(opt.content || "").slice(0, 80),
+        }))
+      : [],
+    userAnswer: String(context.userAnswer || ""),
+    correctAnswer: String(context.answer || ""),
+  };
 }
 
 function buildQuestionContextPrompt(context) {
@@ -252,6 +280,76 @@ function MsgContent({ content }) {
   }
 
   return <div>{blocks}</div>;
+}
+
+// ─── 消息里的题目引用（提问时快照，回看时还能知道问的是哪道题）──────────────
+function QuestionRefCard({ data }) {
+  const [open, setOpen] = useState(false);
+  if (!data) return null;
+
+  const categoryLabel = CATEGORY_META[data.category]?.name || data.category || "";
+  const metaLine = [
+    data.paperTitle,
+    data.index ? `第 ${data.index}${data.total ? `/${data.total}` : ""} 题` : "",
+    // 试卷名里已经带分类时不重复显示
+    data.paperTitle && categoryLabel && data.paperTitle.includes(categoryLabel) ? "" : categoryLabel,
+  ].filter(Boolean).join(" · ");
+
+  return (
+    <div style={{ maxWidth: "100%", border: "1px solid var(--line)", borderRadius: 10, background: "var(--surface)", overflow: "hidden" }}>
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        style={{
+          width: "100%",
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "7px 10px",
+          background: "transparent",
+          border: "none",
+          cursor: "pointer",
+          textAlign: "left",
+          fontFamily: "inherit",
+        }}
+      >
+        <Ico d={<><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" /></>} size={12} sw={1.8} />
+        <span style={{ flex: 1, minWidth: 0, fontSize: 11, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {metaLine || "题目上下文"}
+        </span>
+        {data.userAnswer ? (
+          <span style={{ fontSize: 10, color: "var(--muted)", flexShrink: 0 }}>我的答案 {data.userAnswer}</span>
+        ) : null}
+        <span style={{ fontSize: 10, color: "var(--accent)", flexShrink: 0, whiteSpace: "nowrap" }}>{open ? "收起" : "展开"}</span>
+      </button>
+
+      {open && (
+        <div style={{ padding: "8px 10px 10px", borderTop: "1px solid var(--line)", fontSize: 11, lineHeight: 1.7, color: "var(--muted)" }}>
+          {data.content ? (
+            <div style={{ color: "var(--text)", marginBottom: 6, whiteSpace: "pre-wrap" }}>{data.content}</div>
+          ) : null}
+          {Array.isArray(data.options) && data.options.length > 0 ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+              {data.options.map((option) => (
+                <span
+                  key={option.key}
+                  style={{
+                    color: data.userAnswer && String(data.userAnswer).includes(option.key) ? "var(--accent)" : "var(--muted)",
+                  }}
+                >
+                  {option.key}. {option.content}
+                </span>
+              ))}
+            </div>
+          ) : null}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 6, fontSize: 10 }}>
+            {data.userAnswer ? <span>我的答案：{data.userAnswer}</span> : null}
+            {data.correctAnswer ? <span>正确答案：{data.correctAnswer}</span> : null}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
@@ -571,7 +669,8 @@ export default function AITeacher({ onBack }) {
     autoFollowRef.current = true;
     const userText = text.trim();
     const baseMessages = messagesRef.current.filter((m) => m.role === "user" || m.role === "assistant");
-    const userMsg = { role: "user", content: userText };
+    const questionRef = buildQuestionRef(questionContext);
+    const userMsg = { role: "user", content: userText, meta: questionRef ? { questionRef } : null };
     const nextMessages = [...baseMessages, userMsg];
     setMessages(nextMessages);
     messagesRef.current = nextMessages;
@@ -579,17 +678,17 @@ export default function AITeacher({ onBack }) {
     setLoading(true);
     inputRef.current?.focus();
 
-    const persist = async (role, content) => {
+    const persist = async (role, content, meta = null) => {
       if (!db?.addAIChatMessage) return;
       try {
-        await db.addAIChatMessage({ sessionId: activeSessionId, role, content });
+        await db.addAIChatMessage({ sessionId: activeSessionId, role, content, meta });
       } catch (error) {
         console.error("[AIChat] 持久化失败:", error);
       }
     };
 
     try {
-      await persist("user", userText);
+      await persist("user", userText, userMsg.meta);
       if (baseMessages.filter((m) => m.role === "user").length === 0 && db?.renameAIChatSession) {
         const firstTitle = userText.replace(/\s+/g, " ").slice(0, 18);
         if (firstTitle) await db.renameAIChatSession(activeSessionId, firstTitle);
@@ -965,8 +1064,13 @@ export default function AITeacher({ onBack }) {
                 <div style={{ width: 26, height: 26, borderRadius: 7, flexShrink: 0, display: "grid", placeItems: "center", background: msg.role === "user" ? "transparent" : "var(--accent-soft-bg)", color: msg.role === "user" ? "var(--muted)" : "var(--accent)", border: msg.role === "user" ? "1px solid var(--line)" : "none" }}>
                   <Ico d={msg.role === "assistant" ? ICONS.ai : ICONS.user} size={13} sw={1.8} />
                 </div>
-                <div style={{ background: msg.role === "user" ? "var(--surface-soft)" : "transparent", border: msg.role === "user" ? "1px solid var(--line)" : "none", padding: msg.role === "user" ? "9px 13px" : "1px 0 0", borderRadius: msg.role === "user" ? "12px 2px 12px 12px" : 0, fontSize: 12, lineHeight: 1.75, color: "var(--text)", letterSpacing: "0.1px" }}>
-                  <MsgContent content={msg.content} />
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0, alignItems: msg.role === "user" ? "flex-end" : "flex-start" }}>
+                  {msg.role === "user" && msg.meta?.questionRef ? (
+                    <QuestionRefCard data={msg.meta.questionRef} />
+                  ) : null}
+                  <div style={{ background: msg.role === "user" ? "var(--surface-soft)" : "transparent", border: msg.role === "user" ? "1px solid var(--line)" : "none", padding: msg.role === "user" ? "9px 13px" : "1px 0 0", borderRadius: msg.role === "user" ? "12px 2px 12px 12px" : 0, fontSize: 12, lineHeight: 1.75, color: "var(--text)", letterSpacing: "0.1px" }}>
+                    <MsgContent content={msg.content} />
+                  </div>
                 </div>
               </div>
             ))}
