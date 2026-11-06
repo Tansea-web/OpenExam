@@ -157,32 +157,101 @@ function MsgContent({ content }) {
     return nodes;
   };
 
-  const lines = content.split("\n");
-  return (
-    <div>
-      {lines.map((line, i) => {
-        if (!line) return <div key={i} style={{ height: 6 }} />;
-        const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
-        if (headingMatch) {
-          const level = headingMatch[1].length;
-          const size = Math.max(12, 16 - level);
-          const weight = level <= 2 ? 700 : 600;
-          return <div key={i} style={{ fontSize: size, fontWeight: weight, color: "var(--text)", marginBottom: 4 }}>{renderInline(headingMatch[2])}</div>;
-        }
-        if (line.startsWith("> ")) {
-          return <div key={i} style={{ borderLeft: "3px solid var(--accent)", paddingLeft: 8, color: "var(--muted)", fontSize: 11, marginBottom: 2, fontStyle: "italic" }}>{renderInline(line.slice(2))}</div>;
-        }
-        if (line.startsWith("- ") || line.startsWith("• ")) {
-          return <div key={i} style={{ display: "flex", gap: 7, marginBottom: 2 }}><span style={{ color: "var(--accent)", flexShrink: 0, marginTop: 2, fontSize: 10 }}>▸</span><span>{renderInline(line.slice(2))}</span></div>;
-        }
-        if (/^\d+\. /.test(line)) {
-          const num = line.match(/^(\d+)\. /)[1];
-          return <div key={i} style={{ display: "flex", gap: 7, marginBottom: 2 }}><span style={{ color: "var(--accent)", flexShrink: 0, minWidth: 16, fontSize: 11, fontWeight: 600 }}>{num}.</span><span>{renderInline(line.replace(/^\d+\. /, ""))}</span></div>;
-        }
-        return <div key={i} style={{ marginBottom: 2 }}>{renderInline(line)}</div>;
-      })}
-    </div>
-  );
+  const isTableRow = (line) => /^\s*\|.*\|\s*$/.test(line);
+  const isTableDivider = (line) => /^\s*\|[\s:|-]+\|\s*$/.test(line) && line.includes("-");
+  const splitRow = (line) => line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((cell) => cell.trim());
+
+  const renderRow = (line, key) => {
+    if (!line) return <div key={key} style={{ height: 6 }} />;
+    const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
+    if (headingMatch) {
+      const level = headingMatch[1].length;
+      const size = Math.max(12, 16 - level);
+      const weight = level <= 2 ? 700 : 600;
+      return <div key={key} style={{ fontSize: size, fontWeight: weight, color: "var(--text)", marginBottom: 4 }}>{renderInline(headingMatch[2])}</div>;
+    }
+    if (line.startsWith("> ")) {
+      return <div key={key} style={{ borderLeft: "3px solid var(--accent)", paddingLeft: 8, color: "var(--muted)", fontSize: 11, marginBottom: 2, fontStyle: "italic" }}>{renderInline(line.slice(2))}</div>;
+    }
+    if (line.startsWith("- ") || line.startsWith("• ")) {
+      return <div key={key} style={{ display: "flex", gap: 7, marginBottom: 2 }}><span style={{ color: "var(--accent)", flexShrink: 0, marginTop: 2, fontSize: 10 }}>▸</span><span>{renderInline(line.slice(2))}</span></div>;
+    }
+    if (/^\d+\. /.test(line)) {
+      const num = line.match(/^(\d+)\. /)[1];
+      return <div key={key} style={{ display: "flex", gap: 7, marginBottom: 2 }}><span style={{ color: "var(--accent)", flexShrink: 0, minWidth: 16, fontSize: 11, fontWeight: 600 }}>{num}.</span><span>{renderInline(line.replace(/^\d+\. /, ""))}</span></div>;
+    }
+    return <div key={key} style={{ marginBottom: 2 }}>{renderInline(line)}</div>;
+  };
+
+  const lines = String(content || "").split("\n");
+  const blocks = [];
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+
+    // Markdown 表格：当前行是表格行，下一行是 |---|---| 分隔行
+    if (isTableRow(line) && i + 1 < lines.length && isTableDivider(lines[i + 1])) {
+      const header = splitRow(line);
+      const rows = [];
+      let cursor = i + 2;
+      while (cursor < lines.length && isTableRow(lines[cursor])) {
+        rows.push(splitRow(lines[cursor]));
+        cursor += 1;
+      }
+
+      blocks.push(
+        <div key={`table-${i}`} style={{ overflowX: "auto", margin: "6px 0" }}>
+          <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 300, fontSize: 11.5 }}>
+            <thead>
+              <tr>
+                {header.map((cell, cellIndex) => (
+                  <th
+                    key={cellIndex}
+                    style={{
+                      border: "1px solid var(--line)",
+                      background: "var(--surface-soft)",
+                      padding: "6px 8px",
+                      textAlign: "left",
+                      fontWeight: 600,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {renderInline(cell)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, rowIndex) => (
+                <tr key={rowIndex}>
+                  {header.map((_, cellIndex) => (
+                    <td
+                      key={cellIndex}
+                      style={{
+                        border: "1px solid var(--line)",
+                        padding: "6px 8px",
+                        verticalAlign: "top",
+                        lineHeight: 1.6,
+                      }}
+                    >
+                      {renderInline(row[cellIndex] ?? "")}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+
+      i = cursor - 1;
+      continue;
+    }
+
+    blocks.push(renderRow(line, i));
+  }
+
+  return <div>{blocks}</div>;
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
