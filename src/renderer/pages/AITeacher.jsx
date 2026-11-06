@@ -921,10 +921,38 @@ export default function AITeacher({ onBack }) {
             <div style={{ fontSize: 10, fontWeight: 600, color: "var(--muted)", letterSpacing: "0.5px", marginBottom: 8 }}>会话列表</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 5, maxHeight: 136, overflowY: "auto" }}>
               {sessions.map((session) => (
-                <button key={session.id} onClick={() => { setActiveSessionId(session.id); setPanelOpen(false); }} style={{ padding: "7px 8px", borderRadius: 8, border: "1px solid var(--line)", background: session.id === activeSessionId ? "var(--accent-soft-bg)" : "var(--surface-soft)", color: session.id === activeSessionId ? "var(--accent)" : "var(--text)", textAlign: "left", cursor: "pointer", fontSize: 10, lineHeight: 1.5 }}>
-                  <div style={{ fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{session.title || "新会话"}</div>
-                  <div style={{ color: "var(--muted)" }}>{session.message_count || 0} 条消息</div>
-                </button>
+                <div key={session.id} style={{ display: "flex", alignItems: "stretch", gap: 6, minWidth: 0 }}>
+                  <button
+                    type="button"
+                    onClick={() => { setActiveSessionId(session.id); setPanelOpen(false); }}
+                    style={{ flex: 1, minWidth: 0, padding: "7px 8px", borderRadius: 8, border: "1px solid var(--line)", background: session.id === activeSessionId ? "var(--accent-soft-bg)" : "var(--surface-soft)", color: session.id === activeSessionId ? "var(--accent)" : "var(--text)", textAlign: "left", cursor: "pointer", fontSize: 10, lineHeight: 1.5 }}
+                  >
+                    <div style={{ fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{session.title || "新会话"}</div>
+                    <div style={{ color: "var(--muted)" }}>{session.message_count || 0} 条消息</div>
+                  </button>
+                  <button
+                    type="button"
+                    title="删除该会话"
+                    aria-label="删除该会话"
+                    onClick={(event) => { event.stopPropagation(); deleteSession(session.id); }}
+                    style={{
+                      flexShrink: 0,
+                      width: 28,
+                      borderRadius: 8,
+                      border: "1px solid var(--danger-border)",
+                      background: "var(--surface)",
+                      color: "var(--danger)",
+                      cursor: "pointer",
+                      display: "grid",
+                      placeItems: "center",
+                      transition: "background 0.15s",
+                    }}
+                    onMouseOver={(event) => { event.currentTarget.style.background = "var(--danger-soft-bg, rgba(220, 38, 38, 0.08))"; }}
+                    onMouseOut={(event) => { event.currentTarget.style.background = "var(--surface)"; }}
+                  >
+                    <Ico d={ICONS.trash} size={12} sw={1.8} />
+                  </button>
+                </div>
               ))}
               {!sessions.length && (
                 <div style={{ fontSize: 10, color: "var(--muted)", padding: "6px 2px" }}>暂无会话，点击上方“新建会话”。</div>
