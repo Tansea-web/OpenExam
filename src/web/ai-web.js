@@ -14,6 +14,24 @@
 const DEFAULT_MAX_TOKENS = 2048;
 const JSON_RETRY_SUFFIX = '\n\n只输出一个 JSON 对象，不要输出解释、Markdown 代码块或多余文字。';
 
+// 与桌面端 TEACHER_SYSTEM 保持一致：约束输出格式，避免同类内容时有时无
+const TEACHER_SYSTEM = [
+  '你是一位经验丰富、耐心细致的学习辅导老师，名叫"小开"。',
+  '回答要有清晰结构（分点、标题），必要时举例说明。',
+  '输出格式（必须严格遵守）：',
+  '- 所有数学表达式、公式、方程、比值一律用 LaTeX 行内公式包裹，例如 $20 + 5x$、$\\frac{9}{2}$、$x = 4.57$；',
+  '- 独立成行的公式用 $$...$$；',
+  '- 严禁输出未包裹的公式、MathML 标签（如 <math>）或 HTML 标签，也不要输出多余的 $ 符号；',
+  '- 表格一律用标准 Markdown 表格：表头行 + |---| 分隔行 + 数据行；',
+  '- 列表用 "- " 或 "1. "，分节之间需要分隔时单独一行写 ---。',
+].join('\n');
+
+function withTeacherSystem(messages) {
+  const list = (Array.isArray(messages) ? messages : []).filter((item) => item && item.content);
+  if (list.some((item) => item.role === 'system')) return list;
+  return [{ role: 'system', content: TEACHER_SYSTEM }, ...list];
+}
+
 function trimBase(value) {
   return String(value || '').trim().replace(/\/+$/, '');
 }
@@ -66,7 +84,7 @@ async function requestOpenAI(settings, messages, options = {}) {
   const body = {
     model: resolveModel(settings),
     messages: (Array.isArray(messages) ? messages : []).map((item) => ({
-      role: item.role === 'assistant' ? 'assistant' : 'user',
+      role: item.role === 'assistant' ? 'assistant' : (item.role === 'system' ? 'system' : 'user'),
       content: String(item.content || ''),
     })),
     max_tokens: Number(options.maxTokens) || DEFAULT_MAX_TOKENS,
@@ -90,12 +108,16 @@ async function requestOpenAI(settings, messages, options = {}) {
 
 async function requestAnthropic(settings, messages, options = {}) {
   const url = `${trimBase(settings.apiBase)}/messages`;
+  // Anthropic 的 system 是顶层字段，需要从 messages 里摘出来
+  const systemText = options.system
+    || (Array.isArray(messages) ? messages.filter((item) => item.role === 'system').map((item) => String(item.content || '')).join('\n\n') : '');
+  const chatMessages = (Array.isArray(messages) ? messages : []).filter((item) => item.role !== 'system');
   const body = {
     model: resolveModel(settings),
     max_tokens: Number(options.maxTokens) || DEFAULT_MAX_TOKENS,
-    messages: toAnthropicMessages(messages),
+    messages: toAnthropicMessages(chatMessages),
   };
-  if (options.system) body.system = String(options.system);
+  if (systemText) body.system = systemText;
 
   const response = await fetch(url, {
     method: 'POST',
@@ -217,7 +239,7 @@ export function createWebAI() {
 
     async chat(settings, messages) {
       try {
-        const content = await callModel(settings, messages, { maxTokens: 2048 });
+        const content = await callModel(settings, withTeacherSystem(messages), { maxTokens: 2048 });
         return { success: true, content };
       } catch (error) {
         return { success: false, error: friendlyNetworkError(error, settings) };
@@ -233,7 +255,7 @@ export function createWebAI() {
 
       (async () => {
         try {
-          const text = await callModel(settings, messages, { maxTokens: 2048 });
+          const text = await callModel(settings, withTeacherSystem(messages), { maxTokens: 2048 });
           if (!text) throw new Error('模型没有返回内容');
           const chunkSize = Math.max(2, Math.ceil(text.length / 40));
           for (let index = 0; index < text.length; index += chunkSize) {

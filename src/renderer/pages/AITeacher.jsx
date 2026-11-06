@@ -193,6 +193,10 @@ function MsgContent({ content }) {
 
   const renderRow = (line, key) => {
     if (!line) return <div key={key} style={{ height: 6 }} />;
+    // 水平分隔线 ---（表格分隔行已在上面优先处理）
+    if (/^\s*([-*_])\1{2,}\s*$/.test(line)) {
+      return <hr key={key} style={{ border: "none", borderTop: "1px solid var(--line)", margin: "10px 0" }} />;
+    }
     const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
     if (headingMatch) {
       const level = headingMatch[1].length;

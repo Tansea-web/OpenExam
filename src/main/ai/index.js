@@ -547,7 +547,14 @@ const TEACHER_SYSTEM = buildSystem(`你是一位经验丰富、耐心细致的�
 2. 用通俗易懂的语言解释，必要时举例说明
 3. 鼓励学生思考，不直接给答案，引导式教学
 4. 回答时使用清晰的结构（分点、标题等）
-5. 如果学生问的不是学习相关问题，礼貌地引导回学习话题`);
+5. 如果学生问的不是学习相关问题，礼貌地引导回学习话题
+
+输出格式（必须严格遵守，避免同一类内容时有时无）：
+- 所有数学表达式、公式、方程、比值一律用 LaTeX 行内公式包裹，例如 $20 + 5x$、$\\frac{9}{2}$、$x = 4.57$；
+- 独立成行的公式用 $$...$$；
+- 严禁输出未包裹的公式、MathML 标签（如 <math>）或 HTML 标签，也不要输出多余的 $ 符号；
+- 表格一律用标准 Markdown 表格：表头行 + |---| 分隔行 + 数据行；
+- 列表用 "- " 或 "1. "，分节之间需要分隔时单独一行写 ---。`);
 
 async function chat(settings, messages) {
   const { type, client, model, settings: normalizedSettings } = createClient(settings);
