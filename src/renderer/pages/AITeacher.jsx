@@ -3,6 +3,7 @@ import { getAISettings, isAIConfigured } from "../store/aiSettings.js";
 import CustomSelect from "../components/CustomSelect.jsx";
 import { useDialog } from "../components/DialogProvider.jsx";
 import { CATEGORY_META } from "../../shared/categoryMeta.js";
+import RichQuestionContent from "../components/RichQuestionContent.jsx";
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
 
@@ -67,7 +68,8 @@ function readQuestionContext() {
 // 提问时保存的题目快照：只留展示需要的字段，控制体积
 function buildQuestionRef(context) {
   if (!context) return null;
-  const content = String(context.content || "").replace(/<[^>]+>/g, "").trim();
+  // 保留 HTML / MathML，渲染时交给 RichQuestionContent 处理，否则公式会显示成源码
+  const content = String(context.content || "").trim();
   if (!content && !context.questionId) return null;
   return {
     questionId: String(context.questionId || ""),
@@ -76,11 +78,11 @@ function buildQuestionRef(context) {
     total: Number(context.total) || 0,
     category: String(context.category || ""),
     subCategory: String(context.subCategory || ""),
-    content: content.slice(0, 200),
+    content: content.slice(0, 800),
     options: Array.isArray(context.options)
       ? context.options.slice(0, 6).map((opt) => ({
           key: String(opt.key || ""),
-          content: String(opt.content || "").slice(0, 80),
+          content: String(opt.content || "").slice(0, 240),
         }))
       : [],
     userAnswer: String(context.userAnswer || ""),
@@ -326,20 +328,27 @@ function QuestionRefCard({ data }) {
       {open && (
         <div style={{ padding: "8px 10px 10px", borderTop: "1px solid var(--line)", fontSize: 11, lineHeight: 1.7, color: "var(--muted)" }}>
           {data.content ? (
-            <div style={{ color: "var(--text)", marginBottom: 6, whiteSpace: "pre-wrap" }}>{data.content}</div>
+            <RichQuestionContent value={data.content} style={{ color: "var(--text)", marginBottom: 6 }} />
           ) : null}
           {Array.isArray(data.options) && data.options.length > 0 ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-              {data.options.map((option) => (
-                <span
-                  key={option.key}
-                  style={{
-                    color: data.userAnswer && String(data.userAnswer).includes(option.key) ? "var(--accent)" : "var(--muted)",
-                  }}
-                >
-                  {option.key}. {option.content}
-                </span>
-              ))}
+              {data.options.map((option) => {
+                const picked = data.userAnswer && String(data.userAnswer).includes(option.key);
+                return (
+                  <div
+                    key={option.key}
+                    style={{
+                      display: "flex",
+                      gap: 6,
+                      alignItems: "flex-start",
+                      color: picked ? "var(--accent)" : "var(--muted)",
+                    }}
+                  >
+                    <span style={{ flexShrink: 0 }}>{option.key}.</span>
+                    <RichQuestionContent value={option.content} style={{ minWidth: 0, color: "inherit" }} />
+                  </div>
+                );
+              })}
             </div>
           ) : null}
           <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 6, fontSize: 10 }}>
