@@ -3,6 +3,8 @@ import { getAISettings, isAIConfigured } from "../store/aiSettings.js";
 import CustomSelect from "../components/CustomSelect.jsx";
 import { useDialog } from "../components/DialogProvider.jsx";
 import { CATEGORY_META } from "../../shared/categoryMeta.js";
+import katex from 'katex';
+import 'katex/dist/katex.min.css';
 
 // ─── Icon ─────────────────────────────────────────────────────────────────────
 const Ico = ({ d, size = 14, col = "currentColor", sw = 1.8 }) => (
@@ -92,21 +94,67 @@ function normalizeQuestionOptions(options) {
 
 // ─── Render markdown-like content ────────────────────────────────────────────
 function MsgContent({ content }) {
-  const renderInline = (text) => {
+  const renderMarkup = (text, keyPrefix) => {
     const chunks = String(text || "").split(/(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*)/g);
     return chunks.map((chunk, i) => {
       if (!chunk) return null;
+      const key = `${keyPrefix}-${i}`;
       if (chunk.startsWith("`") && chunk.endsWith("`")) {
-        return <code key={i} style={{ background: "var(--accent-soft-bg)", color: "var(--accent)", borderRadius: 4, padding: "1px 5px", fontSize: 11 }}>{chunk.slice(1, -1)}</code>;
+        return <code key={key} style={{ background: "var(--accent-soft-bg)", color: "var(--accent)", borderRadius: 4, padding: "1px 5px", fontSize: 11 }}>{chunk.slice(1, -1)}</code>;
       }
       if (chunk.startsWith("**") && chunk.endsWith("**")) {
-        return <strong key={i} style={{ fontWeight: 700, color: "var(--text)" }}>{chunk.slice(2, -2)}</strong>;
+        return <strong key={key} style={{ fontWeight: 700, color: "var(--text)" }}>{chunk.slice(2, -2)}</strong>;
       }
       if (chunk.startsWith("*") && chunk.endsWith("*")) {
-        return <em key={i} style={{ fontStyle: "italic", color: "var(--text)" }}>{chunk.slice(1, -1)}</em>;
+        return <em key={key} style={{ fontStyle: "italic", color: "var(--text)" }}>{chunk.slice(1, -1)}</em>;
       }
-      return <React.Fragment key={i}>{chunk}</React.Fragment>;
+      return <React.Fragment key={key}>{chunk}</React.Fragment>;
     });
+  };
+
+  const renderMath = (tex, displayMode, key) => {
+    try {
+      return (
+        <span
+          key={key}
+          style={displayMode
+            ? { display: "block", margin: "6px 0", overflowX: "auto", overflowY: "hidden" }
+            : { display: "inline" }}
+          dangerouslySetInnerHTML={{
+            __html: katex.renderToString(tex, { displayMode, throwOnError: false, output: "html" }),
+          }}
+        />
+      );
+    } catch (error) {
+      return <React.Fragment key={key}>{tex}</React.Fragment>;
+    }
+  };
+
+  // 行内：先摘出 $...$ / $$...$$，剩下的再按轻量 markdown 渲染
+  const renderInline = (text) => {
+    const raw = String(text || "");
+    const nodes = [];
+    const mathRe = /\$\$([^$\n]+?)\$\$|\$([^$\n]+?)\$/g;
+    let last = 0;
+    let match;
+    let index = 0;
+
+    while ((match = mathRe.exec(raw))) {
+      if (match.index > last) {
+        // 顺手清掉不成对的 $（模型偶尔会把 $$ 和 $ 混着写）
+        nodes.push(...renderMarkup(raw.slice(last, match.index).replace(/\$/g, ""), `t${index}`));
+      }
+      const displayMode = match[1] != null;
+      nodes.push(renderMath(displayMode ? match[1] : match[2], displayMode, `math-${index}`));
+      last = match.index + match[0].length;
+      index += 1;
+    }
+
+    if (last < raw.length) {
+      // 收尾时清掉模型偶发的不成对 $，避免残留 $ 符号
+      nodes.push(...renderMarkup(raw.slice(last).replace(/\$/g, ""), "t-end"));
+    }
+    return nodes;
   };
 
   const lines = content.split("\n");
