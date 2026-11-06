@@ -43,11 +43,21 @@ function unescapeHtml(value) {
 }
 
 /** 渲染 $...$ / $$...$$ 公式片段（题库来源：AI 出题或导入内容） */
+/** 公式里夹中文时包成 \text{}，避免 KaTeX 的 unicodeTextInMathMode 警告与斜体渲染 */
+function wrapCjkForMath(value) {
+  return String(value || '')
+    .split(/(\\text\{[^}]*\})/)
+    .map((part) => (part.startsWith('\\text{')
+      ? part
+      : part.replace(/[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]+/g, (match) => `\\text{${match}}`)))
+    .join('');
+}
+
 function renderLatexSegments(html) {
   if (!html.includes('$')) return html;
   const render = (tex, displayMode) => {
     try {
-      return katex.renderToString(tex, { displayMode, throwOnError: false, output: 'html' });
+      return katex.renderToString(wrapCjkForMath(tex), { displayMode, throwOnError: false, strict: 'ignore', output: 'html' });
     } catch (error) {
       return escapeHtml(tex);
     }

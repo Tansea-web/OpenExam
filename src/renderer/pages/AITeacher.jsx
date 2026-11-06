@@ -142,6 +142,12 @@ function MsgContent({ content }) {
     });
   };
 
+  // 公式里夹中文时，KaTeX 会报 unicodeTextInMathMode 并渲染成斜体：把中文包进 \text{}
+  const wrapCjkForMath = (tex) => String(tex || "")
+    .split(/(\\text\{[^}]*\})/)
+    .map((part) => (part.startsWith("\\text{") ? part : part.replace(/[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]+/g, (match) => `\\text{${match}}`)))
+    .join("");
+
   const renderMath = (tex, displayMode, key) => {
     try {
       return (
@@ -151,7 +157,7 @@ function MsgContent({ content }) {
             ? { display: "block", margin: "6px 0", overflowX: "auto", overflowY: "hidden" }
             : { display: "inline" }}
           dangerouslySetInnerHTML={{
-            __html: katex.renderToString(tex, { displayMode, throwOnError: false, output: "html" }),
+            __html: katex.renderToString(wrapCjkForMath(tex), { displayMode, throwOnError: false, strict: "ignore", output: "html" }),
           }}
         />
       );
