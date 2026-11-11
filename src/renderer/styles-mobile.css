@@ -443,9 +443,9 @@
     min-height: 36px;
   }
 
-  /* 内容区留白压缩，底部留出答题卡入口的空间 */
+  /* 内容区留白压缩，底部留出答题卡入口的空间（悬浮按钮占 62~98px） */
   .er-main-inner {
-    padding: 14px 12px 76px !important;
+    padding: 14px 12px 112px !important;
   }
 
   /* 题头信息较多，允许换行 */

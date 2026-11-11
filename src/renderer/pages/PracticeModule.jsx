@@ -23,36 +23,74 @@ const defaultSubCategories = {
 };
 
 // 简约图标组件
+const IconBase = ({ children }) => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    {children}
+  </svg>
+);
+
 const Icons = {
   yanyu: () => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <IconBase>
       <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
-    </svg>
+    </IconBase>
   ),
   shuliang: () => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <IconBase>
       <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-    </svg>
+    </IconBase>
   ),
   panduan: () => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <IconBase>
       <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-    </svg>
+    </IconBase>
   ),
   ziliao: () => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <IconBase>
       <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
-    </svg>
+    </IconBase>
   ),
   changshi: () => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <IconBase>
       <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
-    </svg>
+    </IconBase>
   ),
-  default: () => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/>
-    </svg>
+  cs_net: () => (
+    <IconBase>
+      <circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><ellipse cx="12" cy="12" rx="4.5" ry="9"/>
+    </IconBase>
+  ),
+  cs_base: () => (
+    <IconBase>
+      <rect x="4" y="4" width="16" height="16" rx="3"/><rect x="9" y="9" width="6" height="6" rx="1"/>
+      <path d="M9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3"/>
+    </IconBase>
+  ),
+  cs_security: () => (
+    <IconBase>
+      <path d="M12 3l7 3v6c0 4.4-2.9 7.6-7 9-4.1-1.4-7-4.6-7-9V6z"/><path d="M9 12l2 2 4-4"/>
+    </IconBase>
+  ),
+  cs_os: () => (
+    <IconBase>
+      <rect x="3" y="4" width="18" height="13" rx="2"/><path d="M12 17v4M8.5 21h7"/><path d="M7 8.5l2.5 2L7 12.5"/>
+    </IconBase>
+  ),
+  cs_db: () => (
+    <IconBase>
+      <ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6"/><path d="M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/>
+    </IconBase>
+  ),
+  cs_prog: () => (
+    <IconBase>
+      <polyline points="9 8 5 12 9 16"/><polyline points="15 8 19 12 15 16"/><line x1="13.5" y1="5" x2="10.5" y2="19"/>
+    </IconBase>
+  ),
+  cs_office: () => (
+    <IconBase>
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><polyline points="14 3 14 8 19 8"/>
+      <path d="M9 13h6M9 17h4"/>
+    </IconBase>
   ),
   arrow: () => (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -314,7 +352,7 @@ export default function PracticeModule({ onStartPractice, onImport, onHistory, e
           </div>
         ) : (
           modules.map(mod => {
-            const Icon = Icons[mod.id] || Icons.default;
+            const Icon = Icons[mod.id];
             const isExpanded = expandedId === mod.id;
             const progress = mod.count > 0 ? Math.round(mod.done / mod.count * 100) : 0;
             const subs = subCategories[mod.id] || [];
@@ -323,7 +361,9 @@ export default function PracticeModule({ onStartPractice, onImport, onHistory, e
               <div key={mod.id} className={`practice-item ${isExpanded ? 'expanded' : ''}`}>
                 <div className="practice-item-main" onClick={() => handleExpand(mod.id)}>
                   <div className="practice-icon" style={{ color: mod.color }}>
-                    <Icon />
+                    {Icon
+                      ? <Icon />
+                      : <span className="practice-icon-glyph">{String(mod.name || '?').trim().charAt(0)}</span>}
                   </div>
                   <div className="practice-info">
                     <div className="practice-name">{mod.name}</div>

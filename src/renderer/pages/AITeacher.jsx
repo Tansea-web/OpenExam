@@ -4,8 +4,8 @@ import CustomSelect from "../components/CustomSelect.jsx";
 import { useDialog } from "../components/DialogProvider.jsx";
 import { CATEGORY_META } from "../../shared/categoryMeta.js";
 import RichQuestionContent from "../components/RichQuestionContent.jsx";
-import katex from 'katex';
 import 'katex/dist/katex.min.css';
+import { renderKatexHtml } from "../utils/katexSafe.js";
 
 // ─── Icon ─────────────────────────────────────────────────────────────────────
 const Ico = ({ d, size = 14, col = "currentColor", sw = 1.8 }) => (
@@ -142,28 +142,18 @@ function MsgContent({ content }) {
     });
   };
 
-  // 公式里夹中文时，KaTeX 会报 unicodeTextInMathMode 并渲染成斜体：把中文包进 \text{}
-  const wrapCjkForMath = (tex) => String(tex || "")
-    .split(/(\\text\{[^}]*\})/)
-    .map((part) => (part.startsWith("\\text{") ? part : part.replace(/[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]+/g, (match) => `\\text{${match}}`)))
-    .join("");
-
   const renderMath = (tex, displayMode, key) => {
-    try {
-      return (
-        <span
-          key={key}
-          style={displayMode
-            ? { display: "block", margin: "6px 0", overflowX: "auto", overflowY: "hidden" }
-            : { display: "inline" }}
-          dangerouslySetInnerHTML={{
-            __html: katex.renderToString(wrapCjkForMath(tex), { displayMode, throwOnError: false, strict: "ignore", output: "html" }),
-          }}
-        />
-      );
-    } catch (error) {
-      return <React.Fragment key={key}>{tex}</React.Fragment>;
-    }
+    const html = renderKatexHtml(tex, displayMode);
+    if (!html) return <React.Fragment key={key}>{tex}</React.Fragment>;
+    return (
+      <span
+        key={key}
+        style={displayMode
+          ? { display: "block", margin: "6px 0", overflowX: "auto", overflowY: "hidden" }
+          : { display: "inline" }}
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
+    );
   };
 
   // 行内：先摘出 $...$ / $$...$$，剩下的再按轻量 markdown 渲染

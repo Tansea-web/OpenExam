@@ -1,6 +1,7 @@
-import React, { useMemo } from 'react';
-import katex from 'katex';
+import React, { useMemo, useState } from 'react';
 import 'katex/dist/katex.min.css';
+import { formatAnalysisHtml } from '../utils/analysisFormat.js';
+import { renderKatexHtml } from '../utils/katexSafe.js';
 
 const HTML_RE = /<[^>]+>/;
 const ALLOWED_TAGS = new Set(['p', 'div', 'span', 'strong', 'b', 'em', 'i', 'u', 'br', 'img', 'sup', 'sub', 'table', 'thead', 'tbody', 'tr', 'td', 'th', 'colgroup', 'col', 'ul', 'ol', 'li']);
@@ -43,25 +44,9 @@ function unescapeHtml(value) {
 }
 
 /** 渲染 $...$ / $$...$$ 公式片段（题库来源：AI 出题或导入内容） */
-/** 公式里夹中文时包成 \text{}，避免 KaTeX 的 unicodeTextInMathMode 警告与斜体渲染 */
-function wrapCjkForMath(value) {
-  return String(value || '')
-    .split(/(\\text\{[^}]*\})/)
-    .map((part) => (part.startsWith('\\text{')
-      ? part
-      : part.replace(/[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]+/g, (match) => `\\text{${match}}`)))
-    .join('');
-}
-
 function renderLatexSegments(html) {
   if (!html.includes('$')) return html;
-  const render = (tex, displayMode) => {
-    try {
-      return katex.renderToString(wrapCjkForMath(tex), { displayMode, throwOnError: false, strict: 'ignore', output: 'html' });
-    } catch (error) {
-      return escapeHtml(tex);
-    }
-  };
+  const render = (tex, displayMode) => renderKatexHtml(tex, displayMode) ?? escapeHtml(tex);
   return html
     .replace(/\$\$([\s\S]+?)\$\$/g, (_, tex) => render(unescapeHtml(tex), true))
     .replace(/\$([^$\n<>]{1,300}?)\$/g, (_, tex) => render(unescapeHtml(tex), false));
@@ -213,8 +198,45 @@ export function mathMlToPlainText(value = '') {
   return root.textContent || '';
 }
 
-export default function RichQuestionContent({ value = '', className = '', style = undefined }) {
-  const html = useMemo(() => renderLatexSegments(sanitizeHtml(value)), [value]);
+export default function RichQuestionContent({
+  value = '',
+  className = '',
+  style = undefined,
+  hideAnalysisAnswer = false,
+  raw = undefined,
+  hideRawToggle = false,
+}) {
+  const isAnalysis = String(className).split(/\s+/).includes('rich-question-analysis');
+  const structured = useMemo(
+    () => (isAnalysis ? formatAnalysisHtml(value, { showAnswer: !hideAnalysisAnswer }) : null),
+    [value, isAnalysis, hideAnalysisAnswer],
+  );
+
+  // 「查看原文」默认由组件自己管；外部传入 raw 时改为受控（按钮可放到卡片标题行）
+  const [rawView, setRawView] = useState(null);
+  const controlledRaw = typeof raw === 'boolean';
+  const showRaw = Boolean(structured) && (controlledRaw ? raw : rawView?.value === value && rawView.raw);
+  const html = useMemo(
+    () => renderLatexSegments(showRaw ? sanitizeHtml(value) : (structured || sanitizeHtml(value))),
+    [value, structured, showRaw],
+  );
   if (!html) return null;
-  return <div className={`rich-question-content ${className}`.trim()} style={style} dangerouslySetInnerHTML={{ __html: html }} />;
+
+  return (
+    <div className={`rich-question-content ${className}`.trim()} style={style}>
+      <div className={showRaw ? 'qa-raw-content' : undefined} dangerouslySetInnerHTML={{ __html: html }} />
+      {structured && !hideRawToggle && (
+        <div className="qa-raw-actions">
+          <button
+            type="button"
+            className="qa-raw-toggle"
+            title="对照未经排版的题库原始解析，便于核对内容"
+            onClick={() => setRawView({ value, raw: !showRaw })}
+          >
+            {showRaw ? '返回排版' : '查看原文'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }

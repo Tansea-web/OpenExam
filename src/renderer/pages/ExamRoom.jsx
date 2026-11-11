@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import RichQuestionContent from '../components/RichQuestionContent.jsx';
 import { useDialog } from '../components/DialogProvider.jsx';
 import { getState } from '../store/examStore.js';
 import { gradeSubjectiveQuestion } from '../utils/subjectiveGrade.js';
 import { getAISettings } from '../store/aiSettings.js';
+import { formatAnalysisHtml } from '../utils/analysisFormat.js';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const CAT_NAMES = {
@@ -99,6 +100,9 @@ export default function ExamRoom({ paperId, questions: propQuestions, config, re
   const bodyRef = useRef(null);
   const resumeAppliedRef = useRef(false);
   const autoSubmitRef = useRef(false);
+  // 恢复滚动位置：只在从暂存记录回来时用一次，避免之后切题被反复拉回去
+  const pendingScrollRef = useRef(0);
+  const [scrollRestoreTick, setScrollRestoreTick] = useState(0);
   const persistentPaperId = config?.sourcePaperId || paperId || null;
   const canPersist = Boolean(persistentPaperId) || Boolean(config?.category) || config?.mode === 'wrong-redo' || Boolean(propQuestions?.length);
   const isMemorizeMode  = config?.mode === 'memorize';
@@ -138,6 +142,15 @@ export default function ExamRoom({ paperId, questions: propQuestions, config, re
   const currentQuestion = questions[currentIndex];
   // 背题模式恒显示；其余模式按「这道题是否已经展开过解析」决定，切题不丢
   const showAnalysis = !isMockMode && (isMemorizeMode || Boolean(currentQuestion && analysisShown[currentQuestion.id]));
+
+  // 解析原文对照：按钮放在解析卡片标题行右侧
+  const analysisText = currentQuestion?.analysis_html || currentQuestion?.analysis || '';
+  const [rawAnalysis, setRawAnalysis] = useState(null);
+  const analysisCanToggleRaw = useMemo(
+    () => Boolean(analysisText) && Boolean(formatAnalysisHtml(analysisText, { showAnswer: false })),
+    [analysisText],
+  );
+  const analysisRaw = Boolean(analysisCanToggleRaw && rawAnalysis?.value === analysisText && rawAnalysis.raw);
 
   useEffect(() => {
     if (!currentQuestion) return;
@@ -189,8 +202,29 @@ export default function ExamRoom({ paperId, questions: propQuestions, config, re
     } else if (firstPendingIndex >= 0) {
       setCurrentIndex(firstPendingIndex);
     }
+    // 视图状态一并还原：问 AI / 退出前展开了哪些解析、用的哪种布局，回来保持不变
+    const meta = resumeRecord?.meta || {};
+    if (meta.analysisShown && typeof meta.analysisShown === 'object') {
+      setAnalysisShown(meta.analysisShown);
+    }
+    if (['split', 'centered', 'full'].includes(meta.layoutMode)) {
+      setLayoutMode(meta.layoutMode);
+    }
+    pendingScrollRef.current = Math.max(0, Number(meta.scrollTop) || 0);
+    setScrollRestoreTick((tick) => tick + 1);
     resumeAppliedRef.current = true;
   }, [questions, resumeRecord]);
+
+  useEffect(() => {
+    if (!scrollRestoreTick) return undefined;
+    const top = pendingScrollRef.current;
+    pendingScrollRef.current = 0;
+    if (!top) return undefined;
+    const raf = requestAnimationFrame(() => {
+      bodyRef.current?.scrollTo({ top });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [scrollRestoreTick]);
 
   const formatTime = s => {
     const safe = Math.max(0, Number(s) || 0);
@@ -205,6 +239,10 @@ export default function ExamRoom({ paperId, questions: propQuestions, config, re
     // 题目快照始终随进度保存：题库变动后续做不会串题
     questions,
     currentIndex,
+    // 视图状态：已展开解析的题、布局方式、滚动位置，用于「问 AI」返回后原样恢复
+    analysisShown,
+    layoutMode,
+    scrollTop: Math.max(0, Math.round(bodyRef.current?.scrollTop || 0)),
     durationMinutes: isMockMode ? durationMinutes : undefined,
   });
 
@@ -542,7 +580,7 @@ export default function ExamRoom({ paperId, questions: propQuestions, config, re
         )}
         {(currentQuestion.analysis_html || currentQuestion.analysis) && (
           <div style={{ fontSize: 12, lineHeight: 1.75, color: 'var(--muted)' }}>
-            <RichQuestionContent value={currentQuestion.analysis_html || currentQuestion.analysis} className="rich-question-analysis" />
+            <RichQuestionContent value={currentQuestion.analysis_html || currentQuestion.analysis} className="rich-question-analysis" hideAnalysisAnswer />
           </div>
         )}
       </div>
@@ -569,11 +607,27 @@ export default function ExamRoom({ paperId, questions: propQuestions, config, re
           <span style={{ fontSize: 12, color: 'var(--text)', fontWeight: 500 }}>
             正确答案：<span style={{ color: 'var(--accent)', fontWeight: 700 }}>{formatAnswerForDisplay(currentQuestion.answer, currentQuestion.type)}</span>
           </span>
+          {analysisCanToggleRaw && (
+            <button
+              type="button"
+              className="er-raw-toggle"
+              title="对照未经排版的题库原始解析，便于核对内容"
+              onClick={() => setRawAnalysis({ value: analysisText, raw: !analysisRaw })}
+            >
+              {analysisRaw ? '返回排版' : '查看原文'}
+            </button>
+          )}
         </div>
         {(currentQuestion.analysis_html || currentQuestion.analysis) && (
           <div style={{ fontSize: 12, lineHeight: 1.75, color: 'var(--muted)' }}>
             <strong style={{ color: 'var(--text)', fontWeight: 600, display: 'block', marginBottom: 6 }}>解析：</strong>
-            <RichQuestionContent value={currentQuestion.analysis_html || currentQuestion.analysis} className="rich-question-analysis" />
+            <RichQuestionContent
+              value={analysisText}
+              className="rich-question-analysis"
+              hideAnalysisAnswer
+              raw={analysisRaw}
+              hideRawToggle
+            />
           </div>
         )}
       </div>
@@ -739,11 +793,11 @@ export default function ExamRoom({ paperId, questions: propQuestions, config, re
         </aside>
 
         {/* ── RIGHT: MAIN AREA ── */}
-        <div className="er-main" ref={bodyRef} style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', position: 'relative', minHeight: 0 }}>
-          <div className="er-main-inner" style={{
+        <div className="er-main" style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', position: 'relative', minHeight: 0 }}>
+          <div className="er-main-inner" ref={bodyRef} style={{
             maxWidth: layoutMode === 'centered' ? 760 : layoutMode === 'full' ? 'none' : 'none',
             margin: layoutMode === 'centered' ? '0 auto' : '0',
-            padding: '28px 36px 36px',
+            padding: '28px 36px 76px',
             display: 'flex', flexDirection: 'column', gap: 0, flex: 1,
             width: '100%', boxSizing: 'border-box',
             overflowY: 'auto', minHeight: 0,
